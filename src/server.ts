@@ -4,11 +4,14 @@ import { MarketGateway } from './sockets/marketGateway.js';
 import { PriceIngestor } from './jobs/priceIngestor.js';
 import { logger } from './utils/logger.js';
 import { prisma } from './prisma/client.js';
-import { redis } from './utils/redis.js';
+import { redis, initializeRedis, isRedisAvailable } from './utils/redis.js';
 
-export function startServer() {
+export async function startServer() {
   const app = createApp();
   const httpServer = createServer(app);
+
+  // Try to connect to Redis (non-blocking)
+  await initializeRedis();
 
   // Setup Socket.IO
   const marketGateway = new MarketGateway(httpServer);
@@ -29,7 +32,14 @@ export function startServer() {
     });
 
     await prisma.$disconnect();
-    await redis.quit();
+
+    if (isRedisAvailable()) {
+      try {
+        await redis.quit();
+      } catch (err) {
+        // Ignore errors during shutdown
+      }
+    }
 
     process.exit(0);
   };
@@ -39,4 +49,3 @@ export function startServer() {
 
   return { httpServer, marketGateway, priceIngestor };
 }
-

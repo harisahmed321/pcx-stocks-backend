@@ -1,7 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import { createAdapter } from '@socket.io/redis-adapter';
-import { redisPub, redisSub } from '../utils/redis.js';
+import { redisPub, redisSub, isRedisAvailable } from '../utils/redis.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config/index.js';
 import { AlertsService } from '../modules/alerts/alerts.service.js';
@@ -24,9 +24,17 @@ export class MarketGateway {
   }
 
   private setupRedisAdapter() {
-    // Use Redis adapter for horizontal scaling
-    this.io.adapter(createAdapter(redisPub, redisSub));
-    logger.info('Socket.IO Redis adapter configured');
+    // Use Redis adapter for horizontal scaling only if Redis is available
+    if (isRedisAvailable()) {
+      try {
+        this.io.adapter(createAdapter(redisPub, redisSub));
+        logger.info('Socket.IO Redis adapter configured');
+      } catch (err) {
+        logger.warn('Failed to configure Redis adapter, running in standalone mode');
+      }
+    } else {
+      logger.info('Socket.IO running in standalone mode (Redis not available)');
+    }
   }
 
   private setupNamespaces() {
@@ -66,6 +74,11 @@ export class MarketGateway {
   }
 
   private subscribeToMarketUpdates() {
+    if (!isRedisAvailable()) {
+      logger.info('Redis not available, skipping market updates subscription');
+      return;
+    }
+
     // Subscribe to Redis channel for market updates
     redisSub.subscribe('market:updates', (err) => {
       if (err) {
@@ -118,8 +131,13 @@ export class MarketGateway {
       timestamp: new Date()
     };
 
-    // Publish to Redis for distribution across instances
-    redisPub.publish('market:updates', JSON.stringify(update));
+    if (isRedisAvailable()) {
+      // Publish to Redis for distribution across instances
+      redisPub.publish('market:updates', JSON.stringify(update));
+    } else {
+      // Directly broadcast to connected clients (standalone mode)
+      this.io.of('/market').to(`symbol:${symbol}`).emit('price:update', update);
+    }
   }
 
   public getIO(): Server {

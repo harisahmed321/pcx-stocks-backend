@@ -2,43 +2,73 @@ import Redis from 'ioredis';
 import { config } from '../config/index.js';
 import { logger } from './logger.js';
 
-export const redis = new Redis({
+// Check if Redis is available by attempting to connect
+let redisAvailable = false;
+let connectionAttempted = false;
+
+const redisOptions = {
   host: config.redis.host,
   port: config.redis.port,
   password: config.redis.password,
-  retryStrategy: (times) => {
-    const delay = Math.min(times * 50, 2000);
-    return delay;
+  maxRetriesPerRequest: 1,
+  connectTimeout: 1000,
+  retryStrategy: () => {
+    // Don't retry, fail fast
+    return null;
   },
-});
+  lazyConnect: true,
+  enableOfflineQueue: false
+};
+
+export const redis = new Redis(redisOptions);
+export const redisPub = new Redis(redisOptions);
+export const redisSub = new Redis(redisOptions);
 
 redis.on('connect', () => {
+  redisAvailable = true;
   logger.info('Redis client connected');
 });
 
 redis.on('error', (err) => {
-  logger.error('Redis client error', err);
+  // Silently ignore connection errors
+  redisAvailable = false;
 });
 
-// Publisher for Socket.IO
-export const redisPub = new Redis({
-  host: config.redis.host,
-  port: config.redis.port,
-  password: config.redis.password,
-});
+// Try to connect, but don't fail if Redis is unavailable
+export async function initializeRedis(): Promise<boolean> {
+  if (connectionAttempted) {
+    return redisAvailable;
+  }
 
-// Subscriber for Socket.IO
-export const redisSub = new Redis({
-  host: config.redis.host,
-  port: config.redis.port,
-  password: config.redis.password,
-});
+  connectionAttempted = true;
+
+  try {
+    await Promise.race([
+      Promise.all([redis.connect(), redisPub.connect(), redisSub.connect()]),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timeout')), 2000))
+    ]);
+    redisAvailable = true;
+    logger.info('Redis connected successfully');
+    return true;
+  } catch (err) {
+    redisAvailable = false;
+    logger.warn('Redis is not available. Application will run with limited functionality.');
+    return false;
+  }
+}
+
+export const isRedisAvailable = () => redisAvailable;
 
 // Graceful shutdown
 process.on('beforeExit', async () => {
-  await redis.quit();
-  await redisPub.quit();
-  await redisSub.quit();
-  logger.info('Redis clients disconnected');
+  if (redisAvailable) {
+    try {
+      await redis.quit();
+      await redisPub.quit();
+      await redisSub.quit();
+      logger.info('Redis clients disconnected');
+    } catch (err) {
+      // Ignore errors during shutdown
+    }
+  }
 });
-

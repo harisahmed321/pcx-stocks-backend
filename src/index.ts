@@ -6,7 +6,7 @@ async function main() {
   try {
     logger.info(`Starting PSX Stocks Backend in ${config.env} mode`);
 
-    const { httpServer } = startServer();
+    const { httpServer } = await startServer();
 
     httpServer.listen(config.port, () => {
       logger.info(`🚀 Server running on port ${config.port}`);
@@ -21,4 +21,3 @@ async function main() {
 }
 
 main();
-
