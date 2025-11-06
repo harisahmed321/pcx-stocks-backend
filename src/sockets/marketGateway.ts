@@ -1,0 +1,128 @@
+import { Server, Socket } from 'socket.io';
+import { Server as HttpServer } from 'http';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { redisPub, redisSub } from '../utils/redis.js';
+import { logger } from '../utils/logger.js';
+import { config } from '../config/index.js';
+import { AlertsService } from '../modules/alerts/alerts.service.js';
+
+export class MarketGateway {
+  private io: Server;
+
+  constructor(httpServer: HttpServer) {
+    this.io = new Server(httpServer, {
+      cors: {
+        origin: config.socketIO.corsOrigin,
+        methods: ['GET', 'POST']
+      },
+      path: '/socket.io'
+    });
+
+    this.setupRedisAdapter();
+    this.setupNamespaces();
+    this.subscribeToMarketUpdates();
+  }
+
+  private setupRedisAdapter() {
+    // Use Redis adapter for horizontal scaling
+    this.io.adapter(createAdapter(redisPub, redisSub));
+    logger.info('Socket.IO Redis adapter configured');
+  }
+
+  private setupNamespaces() {
+    const marketNamespace = this.io.of('/market');
+
+    marketNamespace.on('connection', (socket: Socket) => {
+      logger.info(`Client connected to market namespace: ${socket.id}`);
+
+      socket.on('subscribe', (data: { symbols: string[] }) => {
+        if (data.symbols && Array.isArray(data.symbols)) {
+          data.symbols.forEach((symbol) => {
+            const room = `symbol:${symbol.toUpperCase()}`;
+            socket.join(room);
+            logger.info(`Socket ${socket.id} subscribed to ${room}`);
+          });
+
+          socket.emit('subscribed', { symbols: data.symbols });
+        }
+      });
+
+      socket.on('unsubscribe', (data: { symbols: string[] }) => {
+        if (data.symbols && Array.isArray(data.symbols)) {
+          data.symbols.forEach((symbol) => {
+            const room = `symbol:${symbol.toUpperCase()}`;
+            socket.leave(room);
+            logger.info(`Socket ${socket.id} unsubscribed from ${room}`);
+          });
+
+          socket.emit('unsubscribed', { symbols: data.symbols });
+        }
+      });
+
+      socket.on('disconnect', () => {
+        logger.info(`Client disconnected from market namespace: ${socket.id}`);
+      });
+    });
+  }
+
+  private subscribeToMarketUpdates() {
+    // Subscribe to Redis channel for market updates
+    redisSub.subscribe('market:updates', (err) => {
+      if (err) {
+        logger.error('Failed to subscribe to market:updates channel', err);
+      } else {
+        logger.info('Subscribed to market:updates channel');
+      }
+    });
+
+    redisSub.on('message', async (channel, message) => {
+      if (channel === 'market:updates') {
+        try {
+          const priceUpdate = JSON.parse(message);
+          const { symbol, price, change, changePercent, timestamp } = priceUpdate;
+
+          // Broadcast to all clients subscribed to this symbol
+          this.io.of('/market').to(`symbol:${symbol}`).emit('price:update', {
+            symbol,
+            price,
+            change,
+            changePercent,
+            timestamp
+          });
+
+          // Check alerts for this symbol
+          const triggeredAlerts = await AlertsService.checkAlerts(symbol, price);
+
+          // Notify users about triggered alerts
+          for (const alert of triggeredAlerts) {
+            this.io.of('/market').to(`user:${alert.userId}`).emit('alert:trigger', alert);
+          }
+        } catch (error) {
+          logger.error('Error processing market update', error);
+        }
+      }
+    });
+  }
+
+  public broadcastPriceUpdate(
+    symbol: string,
+    price: number,
+    change: number,
+    changePercent: number
+  ) {
+    const update = {
+      symbol,
+      price,
+      change,
+      changePercent,
+      timestamp: new Date()
+    };
+
+    // Publish to Redis for distribution across instances
+    redisPub.publish('market:updates', JSON.stringify(update));
+  }
+
+  public getIO(): Server {
+    return this.io;
+  }
+}
