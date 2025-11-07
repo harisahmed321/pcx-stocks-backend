@@ -2,6 +2,7 @@ import { createServer } from 'http';
 import { createApp } from './app.js';
 import { MarketGateway } from './sockets/marketGateway.js';
 import { PriceIngestor } from './jobs/priceIngestor.js';
+import { SymbolsSyncJob } from './jobs/symbolsSyncJob.js';
 import { logger } from './utils/logger.js';
 import { prisma } from './prisma/client.js';
 import { redis, initializeRedis, isRedisAvailable } from './utils/redis.js';
@@ -21,11 +22,17 @@ export async function startServer() {
   const priceIngestor = new PriceIngestor(marketGateway);
   priceIngestor.start();
 
+  // Start symbols sync job (fetches PSX symbols daily at 7:30 AM)
+  const symbolsSyncJob = new SymbolsSyncJob();
+  symbolsSyncJob.start();
+  logger.info('Symbols sync job started');
+
   // Graceful shutdown
   const shutdown = async () => {
     logger.info('Shutting down gracefully...');
 
     priceIngestor.stop();
+    symbolsSyncJob.stop();
 
     httpServer.close(() => {
       logger.info('HTTP server closed');
@@ -47,5 +54,5 @@ export async function startServer() {
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 
-  return { httpServer, marketGateway, priceIngestor };
+  return { httpServer, marketGateway, priceIngestor, symbolsSyncJob };
 }

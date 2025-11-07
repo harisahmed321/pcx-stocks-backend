@@ -23,55 +23,116 @@ export interface MarketDataPoint {
 export class MarketService {
   private static readonly CACHE_TTL = 10; // seconds
   private static readonly CACHE_PREFIX = 'market:latest:';
-
-  // Mock PSX symbols and their base prices
-  private static readonly MOCK_SYMBOLS = {
-    'PSO': 250.50,
-    'OGDC': 150.75,
-    'PPL': 180.25,
-    'HUBC': 120.00,
-    'LUCK': 800.00,
-    'ENGRO': 300.50,
-    'FFC': 110.75,
-    'MEBL': 90.50,
-    'MCB': 200.00,
-    'HBL': 180.50,
-    'UBL': 165.75,
-    'BAFL': 55.25,
-    'KEL': 4.50,
-    'SNGP': 50.75,
-    'KSE100': 45000.00,
-  };
+  private static readonly BASE_PRICE_CACHE: Record<string, number> = {};
 
   static async getAvailableSymbols() {
-    const symbols = Object.keys(this.MOCK_SYMBOLS).map((symbol) => ({
-      symbol,
-      name: symbol,
-      lastPrice: this.MOCK_SYMBOLS[symbol as keyof typeof this.MOCK_SYMBOLS],
+    // Get trading symbols from database (excluding bonds/debt instruments)
+    const symbols = await prisma.symbol.findMany({
+      where: {
+        isDebt: false
+      },
+      orderBy: {
+        symbol: 'asc'
+      },
+      select: {
+        symbol: true,
+        name: true,
+        sectorName: true,
+        isETF: true
+      }
+    });
+
+    // Generate mock prices for each symbol
+    const symbolsWithPrices = symbols.map((s) => ({
+      ...s,
+      lastPrice: this.getBasePriceForSymbol(s.symbol)
     }));
 
-    return symbols;
+    return symbolsWithPrices;
+  }
+
+  private static getBasePriceForSymbol(symbol: string): number {
+    // Check cache first
+    if (this.BASE_PRICE_CACHE[symbol]) {
+      return this.BASE_PRICE_CACHE[symbol];
+    }
+
+    // Generate base price based on symbol characteristics
+    // Common stocks: 50-500 range
+    // Large cap: Higher prices (PSO, OGDC, etc.)
+    // Small cap: Lower prices
+    const basePrices: Record<string, number> = {
+      PSO: 250.5,
+      OGDC: 150.75,
+      PPL: 180.25,
+      HUBC: 120.0,
+      LUCK: 800.0,
+      ENGRO: 300.5,
+      FFC: 110.75,
+      MEBL: 90.5,
+      MCB: 200.0,
+      HBL: 180.5,
+      UBL: 165.75,
+      BAFL: 55.25,
+      KEL: 4.5,
+      SNGP: 50.75,
+      KSE100: 45000.0
+    };
+
+    // Use predefined price if available, otherwise generate based on symbol hash
+    const basePrice = basePrices[symbol] || this.generateBasePriceFromSymbol(symbol);
+    this.BASE_PRICE_CACHE[symbol] = basePrice;
+
+    return basePrice;
+  }
+
+  private static generateBasePriceFromSymbol(symbol: string): number {
+    // Generate a consistent price based on symbol characters
+    let hash = 0;
+    for (let i = 0; i < symbol.length; i++) {
+      hash = symbol.charCodeAt(i) + ((hash << 5) - hash);
+    }
+
+    // Generate price between 10 and 500
+    const price = 10 + (Math.abs(hash) % 490);
+    return Math.round(price * 100) / 100;
   }
 
   static async getCurrentPrice(symbol: string): Promise<number> {
-    // Check cache first
-    const cached = await redis.get(this.CACHE_PREFIX + symbol);
-    if (cached) {
-      return parseFloat(cached);
+    // Check cache first (if Redis is available)
+    if (isRedisAvailable()) {
+      try {
+        const cached = await redis.get(this.CACHE_PREFIX + symbol);
+        if (cached) {
+          return parseFloat(cached);
+        }
+      } catch (err) {
+        // Redis error, continue without cache
+      }
     }
 
-    // Get from mock data
-    const basePrice = this.MOCK_SYMBOLS[symbol as keyof typeof this.MOCK_SYMBOLS];
-    if (!basePrice) {
+    // Verify symbol exists in database
+    const symbolData = await prisma.symbol.findUnique({
+      where: { symbol: symbol.toUpperCase() }
+    });
+
+    if (!symbolData) {
       throw new AppError(`Symbol ${symbol} not found`, 404);
     }
 
-    // Add random variation (-2% to +2%)
+    // Get base price and add random variation (-2% to +2%)
+    const basePrice = this.getBasePriceForSymbol(symbol);
     const variation = (Math.random() - 0.5) * 0.04;
     const price = basePrice * (1 + variation);
 
-    // Cache it
-    await redis.setex(this.CACHE_PREFIX + symbol, this.CACHE_TTL, price.toString());
+    // Cache it (if Redis is available)
+    if (isRedisAvailable()) {
+      try {
+        await redis.setex(this.CACHE_PREFIX + symbol, this.CACHE_TTL, price.toString());
+      } catch (err) {
+        // Redis error, continue without caching
+      }
+    }
 
     return price;
   }
@@ -102,12 +163,12 @@ export class MarketService {
         symbol: symbol.toUpperCase(),
         timestamp: {
           gte: from,
-          lte: to,
-        },
+          lte: to
+        }
       },
       orderBy: {
-        timestamp: 'asc',
-      },
+        timestamp: 'asc'
+      }
     });
 
     return data.map((d) => ({
@@ -116,7 +177,7 @@ export class MarketService {
       high: Number(d.high),
       low: Number(d.low),
       close: Number(d.close),
-      volume: Number(d.volume),
+      volume: Number(d.volume)
     }));
   }
 
@@ -129,16 +190,22 @@ export class MarketService {
         high: data.high,
         low: data.low,
         close: data.close,
-        volume: data.volume,
-      },
+        volume: data.volume
+      }
     });
 
-    // Update cache
-    await redis.setex(this.CACHE_PREFIX + symbol, this.CACHE_TTL, data.close.toString());
+    // Update cache (if Redis is available)
+    if (isRedisAvailable()) {
+      try {
+        await redis.setex(this.CACHE_PREFIX + symbol, this.CACHE_TTL, data.close.toString());
+      } catch (err) {
+        // Redis error, continue without caching
+      }
+    }
   }
 
   static generateMockPrice(symbol: string): StockPrice {
-    const basePrice = this.MOCK_SYMBOLS[symbol as keyof typeof this.MOCK_SYMBOLS] || 100;
+    const basePrice = this.getBasePriceForSymbol(symbol);
 
     // Random variation (-3% to +3%)
     const variation = (Math.random() - 0.5) * 0.06;
@@ -152,8 +219,7 @@ export class MarketService {
       change: parseFloat(change.toFixed(2)),
       changePercent: parseFloat(changePercent.toFixed(2)),
       volume: Math.floor(Math.random() * 1000000) + 10000,
-      timestamp: new Date(),
+      timestamp: new Date()
     };
   }
 }
-

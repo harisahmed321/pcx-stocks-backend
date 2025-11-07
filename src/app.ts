@@ -16,6 +16,7 @@ import transactionsRoutes from './modules/transactions/transactions.routes.js';
 import watchlistsRoutes from './modules/watchlists/watchlists.routes.js';
 import alertsRoutes from './modules/alerts/alerts.routes.js';
 import marketRoutes from './modules/market/market.routes.js';
+import symbolsRoutes from './modules/symbols/symbols.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -27,7 +28,7 @@ export function createApp(): Express {
   app.use(
     cors({
       origin: config.cors.origin,
-      credentials: true,
+      credentials: true
     })
   );
 
@@ -39,18 +40,20 @@ export function createApp(): Express {
   if (config.env === 'development') {
     app.use(morgan('dev'));
   } else {
-    app.use(morgan('combined', {
-      stream: {
-        write: (message: string) => logger.info(message.trim()),
-      },
-    }));
+    app.use(
+      morgan('combined', {
+        stream: {
+          write: (message: string) => logger.info(message.trim())
+        }
+      })
+    );
   }
 
   // Rate limiting
   const limiter = rateLimit({
     windowMs: config.rateLimit.windowMs,
     max: config.rateLimit.maxRequests,
-    message: 'Too many requests from this IP, please try again later',
+    message: 'Too many requests from this IP, please try again later'
   });
 
   app.use('/api/', limiter);
@@ -60,7 +63,7 @@ export function createApp(): Express {
     res.json({
       status: 'ok',
       timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
+      uptime: process.uptime()
     });
   });
 
@@ -75,6 +78,7 @@ export function createApp(): Express {
   apiRouter.use('/watchlists', watchlistsRoutes);
   apiRouter.use('/alerts', alertsRoutes);
   apiRouter.use('/market', marketRoutes);
+  apiRouter.use('/symbols', symbolsRoutes);
 
   app.use(`/api/${config.apiVersion}`, apiRouter);
 
@@ -86,4 +90,3 @@ export function createApp(): Express {
 
   return app;
 }
-
