@@ -1,5 +1,5 @@
 import { prisma } from '../../prisma/client.js';
-import { redis } from '../../utils/redis.js';
+import { redis, isRedisAvailable } from '../../utils/redis.js';
 import { AppError } from '../../utils/errorHandler.js';
 
 export interface StockPrice {

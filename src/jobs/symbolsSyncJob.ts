@@ -39,6 +39,9 @@ export class SymbolsSyncJob {
 
       for (const symbolData of symbols) {
         try {
+          // Generate URL for symbol: https://dps.psx.com.pk/{symbol}
+          const symbolUrl = `https://dps.psx.com.pk/${symbolData.symbol}`;
+
           const existing = await prisma.symbol.findUnique({
             where: { symbol: symbolData.symbol }
           });
@@ -50,7 +53,8 @@ export class SymbolsSyncJob {
                 name: symbolData.name,
                 sectorName: symbolData.sectorName || null,
                 isETF: symbolData.isETF,
-                isDebt: symbolData.isDebt
+                isDebt: symbolData.isDebt,
+                url: symbolUrl
               }
             });
             updatedCount++;
@@ -61,7 +65,8 @@ export class SymbolsSyncJob {
                 name: symbolData.name,
                 sectorName: symbolData.sectorName || null,
                 isETF: symbolData.isETF,
-                isDebt: symbolData.isDebt
+                isDebt: symbolData.isDebt,
+                url: symbolUrl
               }
             });
             createdCount++;

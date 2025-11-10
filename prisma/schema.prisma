@@ -53,6 +53,7 @@ model Symbol {
   sectorName String?
   isETF      Boolean  @default(false)
   isDebt     Boolean  @default(false)
+  url        String   @default("")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   
@@ -207,18 +208,38 @@ enum AlertType {
 }
 
 model MarketData {
-  id         String   @id @default(uuid())
-  symbol     String
-  timestamp  DateTime
-  open       Decimal? @db.Decimal(24,8)
-  high       Decimal? @db.Decimal(24,8)
-  low        Decimal? @db.Decimal(24,8)
-  close      Decimal? @db.Decimal(24,8)
-  volume     BigInt?
-  createdAt  DateTime @default(now())
+  id              String   @id @default(uuid())
+  symbol          String
+  timestamp       DateTime
+  open            Decimal? @db.Decimal(24,8)
+  high            Decimal? @db.Decimal(24,8)
+  low             Decimal? @db.Decimal(24,8)
+  close           Decimal? @db.Decimal(24,8)
+  volume          BigInt?
+  change          Decimal? @db.Decimal(24,8)
+  changePercent   Decimal? @db.Decimal(24,8)
+  ldcp            Decimal? @db.Decimal(24,8)
+  var             Decimal? @db.Decimal(24,8)
+  haircut         Decimal? @db.Decimal(24,8)
+  peRatio         Decimal? @db.Decimal(24,8)
+  oneYearChange   Decimal? @db.Decimal(24,8)
+  ytdChange       Decimal? @db.Decimal(24,8)
+  askPrice        Decimal? @db.Decimal(24,8)
+  askVolume       BigInt?
+  bidPrice        Decimal? @db.Decimal(24,8)
+  bidVolume       BigInt?
+  circuitBreakerLow  Decimal? @db.Decimal(24,8)
+  circuitBreakerHigh Decimal? @db.Decimal(24,8)
+  dayRangeLow     Decimal? @db.Decimal(24,8)
+  dayRangeHigh    Decimal? @db.Decimal(24,8)
+  week52RangeLow  Decimal? @db.Decimal(24,8)
+  week52RangeHigh Decimal? @db.Decimal(24,8)
+  fetchedAt       DateTime @default(now())
+  createdAt       DateTime @default(now())
   
   @@unique([symbol, timestamp])
   @@index([symbol, timestamp])
+  @@index([symbol, fetchedAt])
 }
 
 model SubscriptionPlan {

@@ -17,6 +17,7 @@ import watchlistsRoutes from './modules/watchlists/watchlists.routes.js';
 import alertsRoutes from './modules/alerts/alerts.routes.js';
 import marketRoutes from './modules/market/market.routes.js';
 import symbolsRoutes from './modules/symbols/symbols.routes.js';
+import adminRoutes from './modules/admin/admin.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -79,6 +80,7 @@ export function createApp(): Express {
   apiRouter.use('/alerts', alertsRoutes);
   apiRouter.use('/market', marketRoutes);
   apiRouter.use('/symbols', symbolsRoutes);
+  apiRouter.use('/admin', adminRoutes);
 
   app.use(`/api/${config.apiVersion}`, apiRouter);
 

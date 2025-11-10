@@ -45,7 +45,8 @@ export class SymbolsService {
         symbol: true,
         name: true,
         sectorName: true,
-        isETF: true
+        isETF: true,
+        url: true
       }
     });
 

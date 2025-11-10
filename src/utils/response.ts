@@ -12,16 +12,21 @@ export class ResponseHelper {
     const response: ApiResponse<T> = {
       success: true,
       data,
-      message,
+      message
     };
     return res.status(statusCode).json(response);
   }
 
-  static error(res: Response, errors: any, message: string = 'An error occurred', statusCode: number = 500) {
+  static error(
+    res: Response,
+    errors: any,
+    message: string = 'An error occurred',
+    statusCode: number = 500
+  ) {
     const response: ApiResponse = {
       success: false,
       errors,
-      message,
+      message
     };
     return res.status(statusCode).json(response);
   }
@@ -59,3 +64,5 @@ export class ResponseHelper {
   }
 }
 
+// Alias for convenience
+export const ApiResponse = ResponseHelper;
