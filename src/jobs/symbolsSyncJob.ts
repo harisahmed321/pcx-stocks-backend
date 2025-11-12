@@ -30,53 +30,53 @@ export class SymbolsSyncJob {
         throw new Error(`PSX API returned ${response.status}: ${response.statusText}`);
       }
 
-      const symbols: PSXSymbol[] = await response.json();
+      const symbols = (await response.json()) as PSXSymbol[];
       logger.info(`Fetched ${symbols.length} symbols from PSX`);
 
-      // Upsert symbols into database
-      let createdCount = 0;
-      let updatedCount = 0;
-
-      for (const symbolData of symbols) {
-        try {
-          // Generate URL for symbol: https://dps.psx.com.pk/{symbol}
-          const symbolUrl = `https://dps.psx.com.pk/${symbolData.symbol}`;
-
-          const existing = await prisma.symbol.findUnique({
-            where: { symbol: symbolData.symbol }
-          });
-
-          if (existing) {
-            await prisma.symbol.update({
-              where: { symbol: symbolData.symbol },
-              data: {
-                name: symbolData.name,
-                sectorName: symbolData.sectorName || null,
-                isETF: symbolData.isETF,
-                isDebt: symbolData.isDebt,
-                url: symbolUrl
-              }
-            });
-            updatedCount++;
-          } else {
-            await prisma.symbol.create({
-              data: {
-                symbol: symbolData.symbol,
-                name: symbolData.name,
-                sectorName: symbolData.sectorName || null,
-                isETF: symbolData.isETF,
-                isDebt: symbolData.isDebt,
-                url: symbolUrl
-              }
-            });
-            createdCount++;
-          }
-        } catch (error: any) {
-          logger.error(`Error upserting symbol ${symbolData.symbol}:`, error.message);
-        }
+      // Check if there are symbols to sync
+      if (symbols.length === 0) {
+        logger.warn('No symbols fetched from PSX API, skipping sync');
+        return;
       }
 
-      logger.info(`Symbols sync completed: ${createdCount} created, ${updatedCount} updated`);
+      // First, delete all existing symbols (empty the table)
+      logger.info('Clearing existing symbols from database...');
+      const deleteResult = await prisma.symbol.deleteMany({});
+      logger.info(`Deleted ${deleteResult.count} existing symbols`);
+
+      // Prepare symbols data with URLs
+      const symbolsToInsert = symbols.map((symbolData) => ({
+        symbol: symbolData.symbol,
+        name: symbolData.name,
+        sectorName: symbolData.sectorName || null,
+        isETF: symbolData.isETF,
+        isDebt: symbolData.isDebt,
+        url: `https://dps.psx.com.pk/company/${symbolData.symbol}`
+      }));
+
+      // Insert all symbols in batch using createMany for better performance
+      logger.info(`Inserting ${symbolsToInsert.length} new symbols...`);
+
+      try {
+        // Use createMany for efficient batch insert (since table is empty, no duplicates)
+        const batchSize = 1000; // Prisma recommends batches of 1000 or less
+        let insertedCount = 0;
+
+        for (let i = 0; i < symbolsToInsert.length; i += batchSize) {
+          const batch = symbolsToInsert.slice(i, i + batchSize);
+          const result = await prisma.symbol.createMany({
+            data: batch,
+            skipDuplicates: true // Safety check, though table should be empty
+          });
+          insertedCount += result.count;
+          logger.debug(`Inserted batch ${Math.floor(i / batchSize) + 1}: ${result.count} symbols`);
+        }
+
+        logger.info(`Symbols sync completed: ${insertedCount} symbols inserted`);
+      } catch (error: any) {
+        logger.error('Error inserting symbols:', error.message);
+        throw error; // Re-throw to be caught by outer try-catch
+      }
     } catch (error: any) {
       logger.error('Error syncing PSX symbols:', error);
     } finally {

@@ -1,12 +1,14 @@
 import { logger } from '../utils/logger.js';
 import { prisma } from '../prisma/client.js';
 import { MarketDataParserService } from '../services/marketDataParser.service.js';
+import pLimit from 'p-limit';
 
 export class MarketDataFetcherJob {
   private intervalId?: NodeJS.Timeout;
   private isRunning = false;
-  private fetchInterval: number = 30000; // Default 30 seconds
+  private fetchInterval: number = 60000; // Default 60 seconds
   private scheduledTime: string | null = null; // For admin scheduling
+  private concurrencyLimit: number = 20; // Parallel fetch limit
 
   /**
    * Set custom fetch interval (in seconds)
@@ -35,19 +37,22 @@ export class MarketDataFetcherJob {
    */
   async fetchSymbolData(symbol: string): Promise<boolean> {
     try {
-      // Get symbol URL from database
+      // Get symbol URL from database, or construct it if missing
       const symbolData = await prisma.symbol.findUnique({
         where: { symbol: symbol.toUpperCase() },
         select: { url: true }
       });
 
-      if (!symbolData || !symbolData.url) {
-        logger.warn(`No URL found for symbol ${symbol}`);
-        return false;
-      }
+      // Use correct URL format: https://dps.psx.com.pk/company/{symbol}
+      const symbolUrl = symbolData?.url || `https://dps.psx.com.pk/company/${symbol.toUpperCase()}`;
+
+      // Ensure URL uses correct format (fix old URLs if needed)
+      const correctUrl = symbolUrl.includes('/company/')
+        ? symbolUrl
+        : `https://dps.psx.com.pk/company/${symbol.toUpperCase()}`;
 
       // Fetch and parse HTML
-      const parsedData = await MarketDataParserService.fetchAndParse(symbol, symbolData.url);
+      const parsedData = await MarketDataParserService.fetchAndParse(symbol, correctUrl);
 
       if (!parsedData) {
         return false;
@@ -64,41 +69,103 @@ export class MarketDataFetcherJob {
         parsedData.change = parsedData.ldcp - Number(previousData.close);
         parsedData.changePercent = (parsedData.change / Number(previousData.close)) * 100;
         parsedData.close = parsedData.ldcp; // Use LDCP as current close
+      } else if (parsedData.ldcp !== null) {
+        // For first record (no previous data), use LDCP as close and set change to 0
+        parsedData.close = parsedData.ldcp;
+        parsedData.change = 0;
+        parsedData.changePercent = 0;
       }
 
-      // Save to database
-      await prisma.marketData.create({
-        data: {
+      // Data Integrity Validation: Only require askPrice to be non-null
+      // change and changePercent can be null for first record, but we set them above
+      if (parsedData.askPrice === null) {
+        logger.debug(
+          `Skipping ${symbol}: Missing required field askPrice (askPrice: ${parsedData.askPrice})`
+        );
+        return false;
+      }
+
+      // Efficient Data Update Logic: Check if record exists for same day
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+      // Check if there's an existing record for today
+      const existingRecord = await prisma.marketData.findFirst({
+        where: {
           symbol: parsedData.symbol.toUpperCase(),
-          timestamp: parsedData.timestamp,
-          open: parsedData.open,
-          high: parsedData.high,
-          low: parsedData.low,
-          close: parsedData.close,
-          volume: parsedData.volume ? BigInt(parsedData.volume) : null,
-          change: parsedData.change,
-          changePercent: parsedData.changePercent,
-          ldcp: parsedData.ldcp,
-          var: parsedData.var,
-          haircut: parsedData.haircut,
-          peRatio: parsedData.peRatio,
-          oneYearChange: parsedData.oneYearChange,
-          ytdChange: parsedData.ytdChange,
-          askPrice: parsedData.askPrice,
-          askVolume: parsedData.askVolume ? BigInt(parsedData.askVolume) : null,
-          bidPrice: parsedData.bidPrice,
-          bidVolume: parsedData.bidVolume ? BigInt(parsedData.bidVolume) : null,
-          circuitBreakerLow: parsedData.circuitBreakerLow,
-          circuitBreakerHigh: parsedData.circuitBreakerHigh,
-          dayRangeLow: parsedData.dayRangeLow,
-          dayRangeHigh: parsedData.dayRangeHigh,
-          week52RangeLow: parsedData.week52RangeLow,
-          week52RangeHigh: parsedData.week52RangeHigh,
-          fetchedAt: new Date()
-        }
+          timestamp: {
+            gte: todayStart,
+            lte: todayEnd
+          }
+        },
+        orderBy: { timestamp: 'desc' }
       });
 
-      logger.info(`✅ Market data saved for ${symbol}`);
+      const dataToSave = {
+        symbol: parsedData.symbol.toUpperCase(),
+        timestamp: parsedData.timestamp,
+        open: parsedData.open,
+        high: parsedData.high,
+        low: parsedData.low,
+        close: parsedData.close,
+        volume: parsedData.volume ? BigInt(parsedData.volume) : null,
+        change: parsedData.change,
+        changePercent: parsedData.changePercent,
+        ldcp: parsedData.ldcp,
+        var: parsedData.var,
+        haircut: parsedData.haircut,
+        peRatio: parsedData.peRatio,
+        oneYearChange: parsedData.oneYearChange,
+        ytdChange: parsedData.ytdChange,
+        askPrice: parsedData.askPrice,
+        askVolume: parsedData.askVolume ? BigInt(parsedData.askVolume) : null,
+        bidPrice: parsedData.bidPrice,
+        bidVolume: parsedData.bidVolume ? BigInt(parsedData.bidVolume) : null,
+        circuitBreakerLow: parsedData.circuitBreakerLow,
+        circuitBreakerHigh: parsedData.circuitBreakerHigh,
+        dayRangeLow: parsedData.dayRangeLow,
+        dayRangeHigh: parsedData.dayRangeHigh,
+        week52RangeLow: parsedData.week52RangeLow,
+        week52RangeHigh: parsedData.week52RangeHigh,
+        fetchedAt: new Date()
+      };
+
+      if (existingRecord) {
+        // Update existing record if data has changed
+        // Compare key fields that should trigger an update
+        const existingChange = existingRecord.change ? Number(existingRecord.change) : null;
+        const existingChangePercent = existingRecord.changePercent
+          ? Number(existingRecord.changePercent)
+          : null;
+        const existingAskPrice = existingRecord.askPrice ? Number(existingRecord.askPrice) : null;
+        const existingClose = existingRecord.close ? Number(existingRecord.close) : null;
+        const existingVolume = existingRecord.volume ? Number(existingRecord.volume) : null;
+
+        const hasChanged =
+          existingChange !== parsedData.change ||
+          existingChangePercent !== parsedData.changePercent ||
+          existingAskPrice !== parsedData.askPrice ||
+          existingClose !== parsedData.close ||
+          existingVolume !== parsedData.volume;
+
+        if (hasChanged) {
+          await prisma.marketData.update({
+            where: { id: existingRecord.id },
+            data: dataToSave
+          });
+          logger.info(`✅ Market data updated for ${symbol} (existing record)`);
+        } else {
+          logger.debug(`No changes detected for ${symbol}, skipping update`);
+        }
+      } else {
+        // Insert new record
+        await prisma.marketData.create({
+          data: dataToSave
+        });
+        logger.info(`✅ Market data saved for ${symbol} (new record)`);
+      }
+
       return true;
     } catch (error: any) {
       const errorMessage = error?.message || error?.toString() || 'Unknown error';
@@ -131,45 +198,41 @@ export class MarketDataFetcherJob {
         orderBy: { symbol: 'asc' }
       });
 
-      logger.info(`Fetching market data for ${symbols.length} symbols...`);
+      logger.info(
+        `Fetching market data for ${symbols.length} symbols with concurrency limit of ${this.concurrencyLimit}...`
+      );
 
       let successCount = 0;
       let failCount = 0;
       let skippedCount = 0;
 
-      // Process symbols in batches to avoid overwhelming the server
-      const batchSize = 10;
-      for (let i = 0; i < symbols.length; i += batchSize) {
-        const batch = symbols.slice(i, i + batchSize);
+      // Parallel Data Fetching with concurrency limit
+      const limit = pLimit(this.concurrencyLimit);
 
-        const results = await Promise.allSettled(
-          batch.map(async (s) => {
+      const results = await Promise.allSettled(
+        symbols.map((s) =>
+          limit(async () => {
             return await this.fetchSymbolData(s.symbol);
           })
-        );
+        )
+      );
 
-        // Count results
-        results.forEach((result) => {
-          if (result.status === 'fulfilled') {
-            if (result.value === true) {
-              successCount++;
-            } else {
-              skippedCount++; // Symbol not available (404, etc.)
-            }
+      // Count results
+      results.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          if (result.value === true) {
+            successCount++;
           } else {
-            failCount++;
-            logger.error(`Failed to process symbol: ${result.reason}`);
+            skippedCount++; // Symbol not available (404, missing required fields, etc.)
           }
-        });
-
-        // Small delay between batches to be respectful
-        if (i + batchSize < symbols.length) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+        } else {
+          failCount++;
+          logger.error(`Failed to process symbol: ${result.reason}`);
         }
-      }
+      });
 
       logger.info(
-        `Market data fetch completed: ${successCount} succeeded, ${skippedCount} skipped (not available), ${failCount} failed`
+        `Market data fetch completed: ${successCount} succeeded, ${skippedCount} skipped (not available/invalid), ${failCount} failed`
       );
     } catch (error: any) {
       logger.error('Error in market data fetch job:', error);
@@ -207,6 +270,14 @@ export class MarketDataFetcherJob {
   }
 
   /**
+   * Set concurrency limit for parallel fetching
+   */
+  setConcurrencyLimit(limit: number): void {
+    this.concurrencyLimit = Math.max(1, Math.min(100, limit)); // Clamp between 1 and 100
+    logger.info(`Market data fetch concurrency limit set to ${this.concurrencyLimit}`);
+  }
+
+  /**
    * Get current status
    */
   getStatus() {
@@ -214,7 +285,8 @@ export class MarketDataFetcherJob {
       running: !!this.intervalId,
       isFetching: this.isRunning,
       interval: this.fetchInterval / 1000, // Convert to seconds
-      scheduledTime: this.scheduledTime
+      scheduledTime: this.scheduledTime,
+      concurrencyLimit: this.concurrencyLimit
     };
   }
 }

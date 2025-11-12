@@ -88,17 +88,28 @@ export class MarketDataParserService {
       // Helper function to extract value from stats_item
       const getStatValue = (label: string): number | null => {
         const item = regPanel.find(`.stats_item`).filter((_, el) => {
-          return $(el).find('.stats_label').text().trim() === label;
+          const labelText = $(el).find('.stats_label').text().trim();
+          // Try exact match first, then case-insensitive match
+          return labelText === label || labelText.toLowerCase() === label.toLowerCase();
         });
-        if (item.length === 0) return null;
+        if (item.length === 0) {
+          logger.debug(`Stat label "${label}" not found for symbol ${symbol}`);
+          return null;
+        }
         const valueText = item.find('.stats_value').text().trim();
-        return parseNumber(valueText);
+        const parsed = parseNumber(valueText);
+        if (parsed === null && valueText) {
+          logger.debug(
+            `Failed to parse value "${valueText}" for label "${label}" for symbol ${symbol}`
+          );
+        }
+        return parsed;
       };
 
-      // Extract basic stats
-      data.open = getStatValue('Open');
-      data.high = getStatValue('High');
-      data.low = getStatValue('Low');
+      // Extract basic stats (try multiple label variations)
+      data.open = getStatValue('Open') || getStatValue('OPEN');
+      data.high = getStatValue('High') || getStatValue('HIGH');
+      data.low = getStatValue('Low') || getStatValue('LOW');
 
       // Volume (remove commas)
       const volumeText = regPanel
@@ -111,11 +122,15 @@ export class MarketDataParserService {
         .trim();
       data.volume = parseNumber(volumeText);
 
-      // Extract LDCP, VAR, HAIRCUT, P/E Ratio
-      data.ldcp = getStatValue('LDCP');
-      data.var = getStatValue('VAR');
-      data.haircut = getStatValue('HAIRCUT');
-      data.peRatio = getStatValue('P/E Ratio (TTM) **');
+      // Extract LDCP, VAR, HAIRCUT, P/E Ratio (try multiple label variations)
+      data.ldcp = getStatValue('LDCP') || getStatValue('ldcp');
+      data.var = getStatValue('VAR') || getStatValue('var');
+      data.haircut = getStatValue('HAIRCUT') || getStatValue('Haircut') || getStatValue('haircut');
+      data.peRatio =
+        getStatValue('P/E Ratio (TTM) **') ||
+        getStatValue('P/E Ratio (TTM)') ||
+        getStatValue('P/E Ratio') ||
+        getStatValue('PE Ratio');
 
       // Extract 1-Year Change and YTD Change (handle percentage signs)
       const oneYearChangeText = regPanel
@@ -138,24 +153,30 @@ export class MarketDataParserService {
         .trim();
       data.ytdChange = parseNumber(ytdChangeText);
 
-      // Extract Ask/Bid prices and volumes
-      data.askPrice = getStatValue('Ask Price');
+      // Extract Ask/Bid prices and volumes (try multiple label variations)
+      data.askPrice = getStatValue('Ask Price') || getStatValue('Ask') || getStatValue('ASK PRICE');
       data.askVolume = parseNumber(
         regPanel
           .find('.stats_item')
           .filter((_, el) => {
-            return $(el).find('.stats_label').text().trim() === 'Ask Volume';
+            const label = $(el).find('.stats_label').text().trim();
+            return (
+              label === 'Ask Volume' || label === 'Ask' || label.toLowerCase() === 'ask volume'
+            );
           })
           .find('.stats_value')
           .text()
           .trim()
       );
-      data.bidPrice = getStatValue('Bid Price');
+      data.bidPrice = getStatValue('Bid Price') || getStatValue('Bid') || getStatValue('BID PRICE');
       data.bidVolume = parseNumber(
         regPanel
           .find('.stats_item')
           .filter((_, el) => {
-            return $(el).find('.stats_label').text().trim() === 'Bid Volume';
+            const label = $(el).find('.stats_label').text().trim();
+            return (
+              label === 'Bid Volume' || label === 'Bid' || label.toLowerCase() === 'bid volume'
+            );
           })
           .find('.stats_value')
           .text()
@@ -216,19 +237,27 @@ export class MarketDataParserService {
         }
       }
 
-      // Calculate change and changePercent if we have close price
-      // Note: We'll need to compare with previous close (LDCP) to calculate change
+      // Set close price to LDCP if available and close is not set
+      // Change and changePercent will be calculated in the fetcher job using previous day's close
       if (data.ldcp !== null && data.close === null) {
-        // If close is not available, try to get it from current price
-        // For now, we'll use LDCP as close if available
         data.close = data.ldcp;
       }
 
-      // Calculate change from LDCP if we have both
-      if (data.close !== null && data.ldcp !== null) {
-        data.change = data.close - data.ldcp;
-        data.changePercent = (data.change / data.ldcp) * 100;
-      }
+      // Try to extract change and changePercent from HTML if available
+      // Look for change indicators in the stats
+      const changeText = regPanel
+        .find('.stats_item')
+        .filter((_, el) => {
+          const label = $(el).find('.stats_label').text().trim();
+          return label === 'Change' || label === 'Change %' || label.includes('Change');
+        })
+        .first()
+        .find('.stats_value')
+        .text()
+        .trim();
+
+      // If change is not found, try to find it in price displays or other sections
+      // The change calculation will be done in the fetcher job using previous close
 
       return data;
     } catch (error: any) {
@@ -274,7 +303,6 @@ export class MarketDataParserService {
       } else {
         logger.debug(`Failed to parse market data for ${symbol} - REG panel not found`);
       }
-
       return parsedData;
     } catch (error: any) {
       // Extract error message properly
