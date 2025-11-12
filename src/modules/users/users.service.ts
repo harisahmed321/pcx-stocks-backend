@@ -4,6 +4,13 @@ import { AppError } from '../../utils/errorHandler.js';
 export interface UpdateUserDto {
   name?: string;
   isFiler?: boolean;
+  isActive?: boolean;
+  phone?: string;
+  cnic?: string;
+  role?: 'USER' | 'ADMIN';
+  plan?: 'FREE' | 'PRO' | 'PREMIUM';
+  paymentExpiration?: Date;
+  nextPayment?: Date;
 }
 
 export class UsersService {
@@ -17,9 +24,14 @@ export class UsersService {
         role: true,
         plan: true,
         isFiler: true,
+        isActive: true,
+        phone: true,
+        cnic: true,
+        paymentExpiration: true,
+        nextPayment: true,
         createdAt: true,
-        updatedAt: true,
-      },
+        updatedAt: true
+      }
     });
 
     if (!user) {
@@ -40,9 +52,14 @@ export class UsersService {
         role: true,
         plan: true,
         isFiler: true,
+        isActive: true,
+        phone: true,
+        cnic: true,
+        paymentExpiration: true,
+        nextPayment: true,
         createdAt: true,
-        updatedAt: true,
-      },
+        updatedAt: true
+      }
     });
 
     return user;
@@ -62,11 +79,16 @@ export class UsersService {
           role: true,
           plan: true,
           isFiler: true,
-          createdAt: true,
+          isActive: true,
+          phone: true,
+          cnic: true,
+          paymentExpiration: true,
+          nextPayment: true,
+          createdAt: true
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { createdAt: 'desc' }
       }),
-      prisma.user.count(),
+      prisma.user.count()
     ]);
 
     return {
@@ -75,9 +97,45 @@ export class UsersService {
         page,
         limit,
         total,
-        totalPages: Math.ceil(total / limit),
-      },
+        totalPages: Math.ceil(total / limit)
+      }
     };
   }
-}
 
+  static async updateUser(userId: string, data: UpdateUserDto) {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        plan: true,
+        isFiler: true,
+        isActive: true,
+        phone: true,
+        cnic: true,
+        paymentExpiration: true,
+        nextPayment: true,
+        createdAt: true,
+        updatedAt: true
+      }
+    });
+
+    return user;
+  }
+
+  static async toggleUserActive(userId: string) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isActive: true }
+    });
+
+    if (!user) {
+      throw new AppError('User not found', 404);
+    }
+
+    return this.updateUser(userId, { isActive: !user.isActive });
+  }
+}

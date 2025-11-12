@@ -59,21 +59,35 @@ export class MarketDataFetcherJob {
       }
 
       // Check if we need to calculate change from previous close
+      // Use parsed change and changePercent from HTML if available, otherwise calculate
       const previousData = await prisma.marketData.findFirst({
         where: { symbol: symbol.toUpperCase() },
         orderBy: { timestamp: 'desc' }
       });
 
-      // If we have previous close and current LDCP, calculate change
-      if (previousData?.close && parsedData.ldcp !== null) {
-        parsedData.change = parsedData.ldcp - Number(previousData.close);
-        parsedData.changePercent = (parsedData.change / Number(previousData.close)) * 100;
-        parsedData.close = parsedData.ldcp; // Use LDCP as current close
-      } else if (parsedData.ldcp !== null) {
-        // For first record (no previous data), use LDCP as close and set change to 0
-        parsedData.close = parsedData.ldcp;
-        parsedData.change = 0;
-        parsedData.changePercent = 0;
+      // If change/changePercent were parsed from HTML, use those values
+      // Otherwise, calculate from previous day's close
+      if (parsedData.change === null || parsedData.changePercent === null) {
+        // If we have previous close and current LDCP, calculate change
+        if (previousData?.close && parsedData.ldcp !== null) {
+          parsedData.change = parsedData.ldcp - Number(previousData.close);
+          parsedData.changePercent = (parsedData.change / Number(previousData.close)) * 100;
+          parsedData.close = parsedData.ldcp; // Use LDCP as current close
+        } else if (parsedData.ldcp !== null) {
+          // For first record (no previous data), use LDCP as close and set change to 0
+          parsedData.close = parsedData.ldcp;
+          if (parsedData.change === null) {
+            parsedData.change = 0;
+          }
+          if (parsedData.changePercent === null) {
+            parsedData.changePercent = 0;
+          }
+        }
+      } else {
+        // If change/changePercent were parsed from HTML, use LDCP as close if available
+        if (parsedData.ldcp !== null && parsedData.close === null) {
+          parsedData.close = parsedData.ldcp;
+        }
       }
 
       // Data Integrity Validation: Only require askPrice to be non-null

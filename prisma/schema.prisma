@@ -8,19 +8,24 @@ datasource db {
 }
 
 model User {
-  id             String         @id @default(uuid())
-  name           String
-  email          String         @unique
-  passwordHash   String
-  role           UserRole       @default(USER)
-  plan           Plan           @default(FREE)
-  isFiler        Boolean        @default(false)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  portfolios     Portfolio[]
-  watchlists     Watchlist[]
-  alerts         Alert[]
-  refreshTokens  RefreshToken[]
+  id                String         @id @default(uuid())
+  name              String
+  email             String         @unique
+  passwordHash      String
+  role              UserRole       @default(USER)
+  plan              Plan           @default(FREE)
+  isFiler           Boolean        @default(false)
+  isActive          Boolean        @default(true)
+  phone             String?
+  cnic              String?
+  paymentExpiration DateTime?
+  nextPayment       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  portfolios        Portfolio[]
+  watchlists        Watchlist[]
+  alerts            Alert[]
+  refreshTokens     RefreshToken[]
 }
 
 model RefreshToken {
@@ -44,6 +49,18 @@ enum Plan {
   FREE
   PRO
   PREMIUM
+}
+
+model RolePermission {
+  id          String   @id @default(uuid())
+  role        UserRole
+  page        String
+  accessType  String   // 'viewOnly' or 'all'
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([role, page])
+  @@index([role])
 }
 
 model Symbol {

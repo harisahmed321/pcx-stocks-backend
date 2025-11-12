@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { AdminController } from './admin.controller.js';
+import { RolePermissionsController } from './role-permissions.controller.js';
 import { authenticate, requireRole } from '../auth/auth.middleware.js';
 
 const router = Router();
@@ -59,5 +60,44 @@ router.put('/fetcher/interval', AdminController.updateFetchInterval);
  * @access  Private (Admin)
  */
 router.put('/fetcher/schedule', AdminController.setScheduledTime);
+
+/**
+ * @route   GET /api/v1/admin/role-permissions
+ * @desc    Get all role permissions
+ * @access  Private (Admin)
+ */
+router.get('/role-permissions', RolePermissionsController.getAllPermissions);
+
+/**
+ * @route   GET /api/v1/admin/role-permissions/:role
+ * @desc    Get permissions for a specific role
+ * @access  Private (Admin)
+ */
+router.get('/role-permissions/:role', RolePermissionsController.getPermissionsByRole);
+
+/**
+ * @route   POST /api/v1/admin/role-permissions
+ * @desc    Create or update a role permission
+ * @access  Private (Admin)
+ */
+router.post(
+  '/role-permissions',
+  RolePermissionsController.permissionValidation,
+  RolePermissionsController.upsertPermission
+);
+
+/**
+ * @route   PUT /api/v1/admin/role-permissions/bulk
+ * @desc    Bulk update role permissions
+ * @access  Private (Admin)
+ */
+router.put('/role-permissions/bulk', RolePermissionsController.bulkUpsertPermissions);
+
+/**
+ * @route   DELETE /api/v1/admin/role-permissions/:role/:page
+ * @desc    Delete a role permission
+ * @access  Private (Admin)
+ */
+router.delete('/role-permissions/:role/:page', RolePermissionsController.deletePermission);
 
 export default router;

@@ -25,5 +25,29 @@ router.patch('/me', authenticate, UsersController.updateValidation, UsersControl
  */
 router.get('/', authenticate, requireRole('ADMIN'), UsersController.getAllUsers);
 
-export default router;
+/**
+ * @route   PATCH /api/v1/users/:userId
+ * @desc    Update user (admin only)
+ * @access  Private/Admin
+ */
+router.patch(
+  '/:userId',
+  authenticate,
+  requireRole('ADMIN'),
+  UsersController.updateValidation,
+  UsersController.updateUser
+);
 
+/**
+ * @route   POST /api/v1/users/:userId/toggle-active
+ * @desc    Toggle user active status (admin only)
+ * @access  Private/Admin
+ */
+router.post(
+  '/:userId/toggle-active',
+  authenticate,
+  requireRole('ADMIN'),
+  UsersController.toggleUserActive
+);
+
+export default router;

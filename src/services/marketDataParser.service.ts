@@ -238,26 +238,54 @@ export class MarketDataParserService {
       }
 
       // Set close price to LDCP if available and close is not set
-      // Change and changePercent will be calculated in the fetcher job using previous day's close
       if (data.ldcp !== null && data.close === null) {
         data.close = data.ldcp;
       }
 
-      // Try to extract change and changePercent from HTML if available
-      // Look for change indicators in the stats
-      const changeText = regPanel
-        .find('.stats_item')
-        .filter((_, el) => {
-          const label = $(el).find('.stats_label').text().trim();
-          return label === 'Change' || label === 'Change %' || label.includes('Change');
-        })
-        .first()
-        .find('.stats_value')
-        .text()
-        .trim();
+      // Extract change and changePercent from div elements with classes change__value and change__percent
+      // These are typically found in the price display area
+      const changeValueDiv = $('.change__value');
+      const changePercentDiv = $('.change__percent');
 
-      // If change is not found, try to find it in price displays or other sections
-      // The change calculation will be done in the fetcher job using previous close
+      if (changeValueDiv.length > 0) {
+        const changeText = changeValueDiv.first().text().trim();
+        data.change = parseNumber(changeText);
+        if (data.change !== null) {
+          logger.debug(
+            `Extracted change value "${changeText}" -> ${data.change} for symbol ${symbol}`
+          );
+        }
+      }
+
+      if (changePercentDiv.length > 0) {
+        const changePercentText = changePercentDiv.first().text().trim();
+        // Remove parentheses if present: "(-1.01%)" -> "-1.01"
+        const cleanedPercent = changePercentText.replace(/[()]/g, '').trim();
+        data.changePercent = parseNumber(cleanedPercent);
+        if (data.changePercent !== null) {
+          logger.debug(
+            `Extracted change percent "${changePercentText}" -> ${data.changePercent} for symbol ${symbol}`
+          );
+        }
+      }
+
+      // If change/changePercent are still null, try to find them in stats_item as fallback
+      if (data.change === null || data.changePercent === null) {
+        const changeText = regPanel
+          .find('.stats_item')
+          .filter((_, el) => {
+            const label = $(el).find('.stats_label').text().trim();
+            return label === 'Change' || label === 'Change %' || label.includes('Change');
+          })
+          .first()
+          .find('.stats_value')
+          .text()
+          .trim();
+
+        if (changeText && data.change === null) {
+          data.change = parseNumber(changeText);
+        }
+      }
 
       return data;
     } catch (error: any) {

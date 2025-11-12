@@ -29,7 +29,10 @@ export function createApp(): Express {
   app.use(
     cors({
       origin: config.cors.origin,
-      credentials: true
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization'],
+      exposedHeaders: ['Content-Type', 'Authorization']
     })
   );
 

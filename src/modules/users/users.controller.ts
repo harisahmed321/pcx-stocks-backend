@@ -5,8 +5,33 @@ import { body, validationResult } from 'express-validator';
 
 export class UsersController {
   static updateValidation = [
-    body('name').optional().trim().isLength({ min: 2, max: 100 }).withMessage('Name must be 2-100 characters'),
+    body('name')
+      .optional()
+      .trim()
+      .isLength({ min: 2, max: 100 })
+      .withMessage('Name must be 2-100 characters'),
     body('isFiler').optional().isBoolean().withMessage('isFiler must be a boolean'),
+    body('isActive').optional().isBoolean().withMessage('isActive must be a boolean'),
+    body('phone')
+      .optional()
+      .trim()
+      .isLength({ min: 10, max: 15 })
+      .withMessage('Phone must be 10-15 characters'),
+    body('cnic')
+      .optional()
+      .trim()
+      .isLength({ min: 13, max: 15 })
+      .withMessage('CNIC must be 13-15 characters'),
+    body('role').optional().isIn(['USER', 'ADMIN']).withMessage('Role must be USER or ADMIN'),
+    body('plan')
+      .optional()
+      .isIn(['FREE', 'PRO', 'PREMIUM'])
+      .withMessage('Plan must be FREE, PRO, or PREMIUM'),
+    body('paymentExpiration')
+      .optional()
+      .isISO8601()
+      .withMessage('Payment expiration must be a valid date'),
+    body('nextPayment').optional().isISO8601().withMessage('Next payment must be a valid date')
   ];
 
   static async getMe(req: Request, res: Response, next: NextFunction) {
@@ -51,5 +76,33 @@ export class UsersController {
       next(error);
     }
   }
-}
 
+  static async updateUser(req: Request, res: Response, next: NextFunction) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return ResponseHelper.badRequest(res, errors.array(), 'Validation failed');
+      }
+
+      const { userId } = req.params;
+      const user = await UsersService.updateUser(userId, req.body);
+      return ResponseHelper.success(res, user, 'User updated successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async toggleUserActive(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { userId } = req.params;
+      const user = await UsersService.toggleUserActive(userId);
+      return ResponseHelper.success(
+        res,
+        user,
+        `User ${user.isActive ? 'activated' : 'deactivated'} successfully`
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
+}
