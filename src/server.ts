@@ -31,7 +31,7 @@ export async function startServer() {
 
   // Start market data fetcher job (fetches market data every 30 seconds)
   const marketDataFetcherJob = new MarketDataFetcherJob();
-  marketDataFetcherJob.start();
+  await marketDataFetcherJob.start();
   logger.info('Market data fetcher job started');
 
   // Inject job instance into admin controller

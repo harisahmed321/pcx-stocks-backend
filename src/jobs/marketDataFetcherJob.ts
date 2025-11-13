@@ -9,18 +9,23 @@ export class MarketDataFetcherJob {
   private fetchInterval: number = 60000; // Default 60 seconds
   private scheduledTime: string | null = null; // For admin scheduling
   private concurrencyLimit: number = 20; // Parallel fetch limit
+  private startTime: string | null = null; // Start time in HH:mm format (24-hour)
+  private endTime: string | null = null; // End time in HH:mm format (24-hour)
 
   /**
    * Set custom fetch interval (in seconds)
    */
-  setInterval(seconds: number): void {
+  async setInterval(seconds: number): Promise<void> {
     this.fetchInterval = seconds * 1000;
     logger.info(`Market data fetch interval set to ${seconds} seconds`);
+
+    // Save to database
+    await this.saveConfiguration();
 
     // Restart with new interval if already running
     if (this.intervalId) {
       this.stop();
-      this.start();
+      await this.start();
     }
   }
 
@@ -30,6 +35,62 @@ export class MarketDataFetcherJob {
   setScheduledTime(time: string | null): void {
     this.scheduledTime = time;
     logger.info(`Market data scheduled time set to: ${time || 'disabled'}`);
+  }
+
+  /**
+   * Set start and end time for market data fetching (24-hour format, e.g., "09:00", "17:00")
+   */
+  async setTimeWindow(startTime: string | null, endTime: string | null): Promise<void> {
+    this.startTime = startTime;
+    this.endTime = endTime;
+    logger.info(
+      `Market data fetch time window set to: ${startTime || 'no start'} - ${endTime || 'no end'}`
+    );
+    // Save to database
+    await this.saveConfiguration();
+  }
+
+  /**
+   * Check if current time is within the allowed time window
+   */
+  private isWithinTimeWindow(): boolean {
+    if (!this.startTime && !this.endTime) {
+      return true; // No time restrictions
+    }
+
+    const now = new Date();
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    const currentTimeMinutes = currentHour * 60 + currentMinute;
+
+    if (this.startTime) {
+      const [startHour, startMinute] = this.startTime.split(':').map(Number);
+      const startTimeMinutes = startHour * 60 + startMinute;
+
+      if (this.endTime) {
+        // Both start and end time specified
+        const [endHour, endMinute] = this.endTime.split(':').map(Number);
+        const endTimeMinutes = endHour * 60 + endMinute;
+
+        if (startTimeMinutes <= endTimeMinutes) {
+          // Normal case: start < end (e.g., 09:00 - 17:00)
+          return currentTimeMinutes >= startTimeMinutes && currentTimeMinutes <= endTimeMinutes;
+        } else {
+          // Overnight case: start > end (e.g., 22:00 - 06:00)
+          return currentTimeMinutes >= startTimeMinutes || currentTimeMinutes <= endTimeMinutes;
+        }
+      } else {
+        // Only start time specified
+        return currentTimeMinutes >= startTimeMinutes;
+      }
+    } else if (this.endTime) {
+      // Only end time specified
+      const [endHour, endMinute] = this.endTime.split(':').map(Number);
+      const endTimeMinutes = endHour * 60 + endMinute;
+      return currentTimeMinutes <= endTimeMinutes;
+    }
+
+    return true;
   }
 
   /**
@@ -201,6 +262,9 @@ export class MarketDataFetcherJob {
       return;
     }
 
+    // Note: Time window check is now done at the interval callback level
+    // This method assumes it's only called when within the time window
+
     try {
       this.isRunning = true;
       logger.info('Starting market data fetch for all symbols...');
@@ -256,17 +320,121 @@ export class MarketDataFetcherJob {
   }
 
   /**
+   * Load configuration from database
+   */
+  async loadConfiguration(): Promise<void> {
+    try {
+      const configs = await (prisma as any).systemConfig.findMany({
+        where: {
+          key: {
+            in: [
+              'marketDataFetcher.startTime',
+              'marketDataFetcher.endTime',
+              'marketDataFetcher.interval'
+            ]
+          }
+        }
+      });
+
+      const configMap = new Map(configs.map((c: any) => [c.key, c.value]));
+
+      // Load time window (set directly without saving to avoid recursion)
+      const startTime = configMap.get('marketDataFetcher.startTime');
+      const endTime = configMap.get('marketDataFetcher.endTime');
+      if (startTime !== undefined || endTime !== undefined) {
+        this.startTime = startTime && typeof startTime === 'string' ? startTime : null;
+        this.endTime = endTime && typeof endTime === 'string' ? endTime : null;
+        logger.info(
+          `Loaded time window from database: ${this.startTime || 'no start'} - ${this.endTime || 'no end'}`
+        );
+      }
+
+      // Load interval (set directly without saving to avoid recursion)
+      const interval = configMap.get('marketDataFetcher.interval');
+      if (interval && typeof interval === 'string') {
+        const intervalSeconds = parseInt(interval, 10);
+        if (!isNaN(intervalSeconds) && intervalSeconds > 0) {
+          this.fetchInterval = intervalSeconds * 1000;
+          logger.info(`Loaded fetch interval from database: ${intervalSeconds}s`);
+        }
+      }
+    } catch (error: any) {
+      logger.error('Error loading market data fetcher configuration:', error);
+      // Continue with defaults if loading fails
+    }
+  }
+
+  /**
+   * Save configuration to database
+   */
+  async saveConfiguration(): Promise<void> {
+    try {
+      // Save time window
+      await (prisma as any).systemConfig.upsert({
+        where: { key: 'marketDataFetcher.startTime' },
+        update: { value: this.startTime || null },
+        create: {
+          key: 'marketDataFetcher.startTime',
+          value: this.startTime || null,
+          description: 'Start time for market data fetching (HH:mm format)'
+        }
+      });
+
+      await (prisma as any).systemConfig.upsert({
+        where: { key: 'marketDataFetcher.endTime' },
+        update: { value: this.endTime || null },
+        create: {
+          key: 'marketDataFetcher.endTime',
+          value: this.endTime || null,
+          description: 'End time for market data fetching (HH:mm format)'
+        }
+      });
+
+      // Save interval
+      await (prisma as any).systemConfig.upsert({
+        where: { key: 'marketDataFetcher.interval' },
+        update: { value: (this.fetchInterval / 1000).toString() },
+        create: {
+          key: 'marketDataFetcher.interval',
+          value: (this.fetchInterval / 1000).toString(),
+          description: 'Fetch interval in seconds'
+        }
+      });
+
+      logger.debug('Market data fetcher configuration saved to database');
+    } catch (error: any) {
+      logger.error('Error saving market data fetcher configuration:', error);
+    }
+  }
+
+  /**
    * Start the background job
    */
-  start(): void {
+  async start(): Promise<void> {
+    // Load configuration from database first
+    await this.loadConfiguration();
+
     logger.info(`Starting market data fetcher job (interval: ${this.fetchInterval / 1000}s)`);
 
     const runFetch = () => {
-      this.fetchAllSymbols();
+      // Check time window before running
+      if (this.isWithinTimeWindow()) {
+        this.fetchAllSymbols();
+      } else {
+        logger.debug(
+          `Skipping market data fetch - outside time window (${this.startTime || 'no start'} - ${this.endTime || 'no end'})`
+        );
+      }
     };
 
-    // Run immediately on startup
-    runFetch();
+    // Run immediately on startup only if within time window
+    if (this.isWithinTimeWindow()) {
+      runFetch();
+    } else {
+      logger.info(
+        `Skipping initial fetch - outside time window (${this.startTime || 'no start'} - ${this.endTime || 'no end'})`
+      );
+    }
 
     // Schedule periodic fetches
     this.intervalId = setInterval(runFetch, this.fetchInterval);
@@ -300,6 +468,8 @@ export class MarketDataFetcherJob {
       isFetching: this.isRunning,
       interval: this.fetchInterval / 1000, // Convert to seconds
       scheduledTime: this.scheduledTime,
+      startTime: this.startTime,
+      endTime: this.endTime,
       concurrencyLimit: this.concurrencyLimit
     };
   }

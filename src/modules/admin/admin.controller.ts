@@ -128,7 +128,7 @@ export class AdminController {
         return ResponseHelper.error(res, null, 'Market data fetcher job not initialized', 500);
       }
 
-      marketDataFetcherJobInstance.setInterval(interval);
+      await marketDataFetcherJobInstance.setInterval(interval);
 
       return ResponseHelper.success(
         res,
@@ -138,6 +138,47 @@ export class AdminController {
     } catch (error) {
       logger.error('Error updating fetch interval:', error);
       return ResponseHelper.error(res, null, 'Failed to update interval', 500);
+    }
+  }
+
+  /**
+   * Set time window for fetching (start and end time)
+   */
+  static async setTimeWindow(req: Request, res: Response) {
+    try {
+      const { startTime, endTime } = req.body; // in HH:mm format (24-hour)
+
+      // Validate time format if provided
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (startTime && !timeRegex.test(startTime)) {
+        return ResponseHelper.badRequest(
+          res,
+          null,
+          'Invalid start time format. Use HH:mm (24-hour format)'
+        );
+      }
+      if (endTime && !timeRegex.test(endTime)) {
+        return ResponseHelper.badRequest(
+          res,
+          null,
+          'Invalid end time format. Use HH:mm (24-hour format)'
+        );
+      }
+
+      if (!marketDataFetcherJobInstance) {
+        return ResponseHelper.error(res, null, 'Market data fetcher job not initialized', 500);
+      }
+
+      await marketDataFetcherJobInstance.setTimeWindow(startTime || null, endTime || null);
+
+      return ResponseHelper.success(
+        res,
+        { startTime: startTime || null, endTime: endTime || null },
+        `Time window updated: ${startTime || 'no start'} - ${endTime || 'no end'}`
+      );
+    } catch (error) {
+      logger.error('Error updating time window:', error);
+      return ResponseHelper.error(res, null, 'Failed to update time window', 500);
     }
   }
 

@@ -8,35 +8,40 @@ datasource db {
 }
 
 model User {
-  id                String         @id @default(uuid())
+  id                String            @id @default(uuid())
   name              String
-  email             String         @unique
+  email             String            @unique
   passwordHash      String
-  role              UserRole       @default(USER)
-  plan              Plan           @default(FREE)
-  isFiler           Boolean        @default(false)
-  isActive          Boolean        @default(true)
+  role              UserRole          @default(USER)
+  plan              Plan              @default(LITE)
+  planId            String?
+  planRelation      SubscriptionPlan? @relation(fields: [planId], references: [id])
+  isFiler           Boolean           @default(false)
+  isActive          Boolean           @default(true)
   phone             String?
   cnic              String?
   paymentExpiration DateTime?
   nextPayment       DateTime?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
   portfolios        Portfolio[]
   watchlists        Watchlist[]
   alerts            Alert[]
   refreshTokens     RefreshToken[]
+  notifications     Notification[]
+
+  @@index([planId])
 }
 
 model RefreshToken {
-  id         String   @id @default(uuid())
-  tokenHash  String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId     String
-  createdAt  DateTime @default(now())
-  revoked    Boolean  @default(false)
-  expiresAt  DateTime
-  
+  id        String   @id @default(uuid())
+  tokenHash String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  createdAt DateTime @default(now())
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+
   @@index([userId])
 }
 
@@ -46,18 +51,19 @@ enum UserRole {
 }
 
 enum Plan {
-  FREE
+  LITE
   PRO
+  ELITE
   PREMIUM
 }
 
 model RolePermission {
-  id          String   @id @default(uuid())
-  role        UserRole
-  page        String
-  accessType  String   // 'viewOnly' or 'all'
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(uuid())
+  role       UserRole
+  page       String
+  accessType String // 'viewOnly' or 'all'
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@unique([role, page])
   @@index([role])
@@ -73,59 +79,65 @@ model Symbol {
   url        String   @default("")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  
+
   @@index([symbol])
   @@index([name])
 }
 
 model Portfolio {
-  id          String       @id @default(uuid())
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String
-  name        String
-  description String?
-  cashBalance Decimal      @default(0) @db.Decimal(24, 8)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  holdings    Holding[]
+  id           String        @id @default(uuid())
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  name         String
+  description  String?
+  cashBalance  Decimal       @default(0) @db.Decimal(24, 8)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  holdings     Holding[]
   transactions Transaction[]
-  
+  payouts      Payout[]
+
   @@index([userId])
 }
 
 model Holding {
-  id            String    @id @default(uuid())
-  portfolio     Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  portfolioId   String
-  symbol        String
-  name          String?
-  quantity      Decimal   @db.Decimal(24,8)
-  avgBuyPrice   Decimal   @db.Decimal(24,8)
-  currency      String    @default("PKR")
-  addedAt       DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  transactions  Transaction[]
+  id               String                    @id @default(uuid())
+  portfolio        Portfolio                 @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  portfolioId      String
+  symbol           String
+  name             String?
+  quantity         Decimal                   @db.Decimal(24, 8)
+  avgBuyPrice      Decimal                   @db.Decimal(24, 8)
+  currency         String                    @default("PKR")
+  addedAt          DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  transactions     Transaction[]
   corporateActions CorporateActionInstance[]
-  
+  payouts          Payout[]
+
   @@index([portfolioId])
   @@index([symbol])
 }
 
 model Transaction {
-  id          String    @id @default(uuid())
-  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
-  portfolioId String
-  holding     Holding?  @relation(fields: [holdingId], references: [id], onDelete: SetNull)
-  holdingId   String?
-  type        TransactionType
-  symbol      String
-  quantity    Decimal   @db.Decimal(24,8)
-  price       Decimal   @db.Decimal(24,8)
-  fees        Decimal   @db.Decimal(24,8)   @default(0)
-  date        DateTime
-  createdAt   DateTime  @default(now())
-  notes       String?
-  
+  id              String          @id @default(uuid())
+  portfolio       Portfolio       @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  portfolioId     String
+  holding         Holding?        @relation(fields: [holdingId], references: [id], onDelete: SetNull)
+  holdingId       String?
+  type            TransactionType
+  symbol          String
+  quantity        Decimal         @db.Decimal(24, 8)
+  price           Decimal         @db.Decimal(24, 8)
+  fees            Decimal         @default(0) @db.Decimal(24, 8)
+  date            DateTime
+  createdAt       DateTime        @default(now())
+  notes           String?
+  // Tax fields
+  capitalGainsTax Decimal?        @db.Decimal(24, 8) // CGT on SELL transactions
+  withholdingTax  Decimal?        @db.Decimal(24, 8) // Withholding tax on dividends
+  taxDeductions   TaxDeduction[]
+
   @@index([portfolioId])
   @@index([symbol])
   @@index([date])
@@ -141,17 +153,18 @@ enum TransactionType {
 }
 
 model CorporateAction {
-  id           String   @id @default(uuid())
-  symbol       String
-  type         CorporateActionType
-  ratio        String?  // e.g., "1:10" or "10%"
-  recordDate   DateTime
-  exDate       DateTime?
-  paymentDate  DateTime?
-  description  String?
-  createdAt    DateTime @default(now())
-  instances    CorporateActionInstance[]
-  
+  id          String                    @id @default(uuid())
+  symbol      String
+  type        CorporateActionType
+  ratio       String? // e.g., "1:10" or "10%"
+  recordDate  DateTime
+  exDate      DateTime?
+  paymentDate DateTime?
+  description String?
+  createdAt   DateTime                  @default(now())
+  instances   CorporateActionInstance[]
+  payouts     Payout[]
+
   @@index([symbol])
   @@index([recordDate])
 }
@@ -166,52 +179,52 @@ enum CorporateActionType {
 
 // Instance/Link table to apply corporate action to holdings (if manual)
 model CorporateActionInstance {
-  id                 String           @id @default(uuid())
-  holding            Holding          @relation(fields: [holdingId], references: [id], onDelete: Cascade)
-  holdingId          String
-  corporateAction    CorporateAction  @relation(fields: [corporateActionId], references: [id], onDelete: Cascade)
-  corporateActionId  String
-  appliedAt          DateTime         @default(now())
-  notes              String?
-  
+  id                String          @id @default(uuid())
+  holding           Holding         @relation(fields: [holdingId], references: [id], onDelete: Cascade)
+  holdingId         String
+  corporateAction   CorporateAction @relation(fields: [corporateActionId], references: [id], onDelete: Cascade)
+  corporateActionId String
+  appliedAt         DateTime        @default(now())
+  notes             String?
+
   @@index([holdingId])
   @@index([corporateActionId])
 }
 
 model Watchlist {
-  id        String         @id @default(uuid())
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String          @id @default(uuid())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   name      String
   items     WatchlistItem[]
-  createdAt DateTime       @default(now())
-  
+  createdAt DateTime        @default(now())
+
   @@index([userId])
 }
 
 model WatchlistItem {
-  id           String    @id @default(uuid())
-  watchlist    Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
-  watchlistId  String
-  symbol       String
-  notes        String?
-  createdAt    DateTime  @default(now())
-  
+  id          String    @id @default(uuid())
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  watchlistId String
+  symbol      String
+  notes       String?
+  createdAt   DateTime  @default(now())
+
   @@index([watchlistId])
   @@index([symbol])
 }
 
 model Alert {
-  id          String   @id @default(uuid())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String    @id @default(uuid())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId      String
   symbol      String
   alertType   AlertType
-  condition   String   // e.g. "> 100" or "percent_change < -5"
-  triggered   Boolean  @default(false)
-  createdAt   DateTime @default(now())
+  condition   String // e.g. "> 100" or "percent_change < -5"
+  triggered   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
   triggeredAt DateTime?
-  
+
   @@index([userId])
   @@index([symbol])
   @@index([triggered])
@@ -225,47 +238,154 @@ enum AlertType {
 }
 
 model MarketData {
-  id              String   @id @default(uuid())
-  symbol          String
-  timestamp       DateTime
-  open            Decimal? @db.Decimal(24,8)
-  high            Decimal? @db.Decimal(24,8)
-  low             Decimal? @db.Decimal(24,8)
-  close           Decimal? @db.Decimal(24,8)
-  volume          BigInt?
-  change          Decimal? @db.Decimal(24,8)
-  changePercent   Decimal? @db.Decimal(24,8)
-  ldcp            Decimal? @db.Decimal(24,8)
-  var             Decimal? @db.Decimal(24,8)
-  haircut         Decimal? @db.Decimal(24,8)
-  peRatio         Decimal? @db.Decimal(24,8)
-  oneYearChange   Decimal? @db.Decimal(24,8)
-  ytdChange       Decimal? @db.Decimal(24,8)
-  askPrice        Decimal? @db.Decimal(24,8)
-  askVolume       BigInt?
-  bidPrice        Decimal? @db.Decimal(24,8)
-  bidVolume       BigInt?
-  circuitBreakerLow  Decimal? @db.Decimal(24,8)
-  circuitBreakerHigh Decimal? @db.Decimal(24,8)
-  dayRangeLow     Decimal? @db.Decimal(24,8)
-  dayRangeHigh    Decimal? @db.Decimal(24,8)
-  week52RangeLow  Decimal? @db.Decimal(24,8)
-  week52RangeHigh Decimal? @db.Decimal(24,8)
-  fetchedAt       DateTime @default(now())
-  createdAt       DateTime @default(now())
-  
+  id                 String   @id @default(uuid())
+  symbol             String
+  timestamp          DateTime
+  open               Decimal? @db.Decimal(24, 8)
+  high               Decimal? @db.Decimal(24, 8)
+  low                Decimal? @db.Decimal(24, 8)
+  close              Decimal? @db.Decimal(24, 8)
+  volume             BigInt?
+  change             Decimal? @db.Decimal(24, 8)
+  changePercent      Decimal? @db.Decimal(24, 8)
+  ldcp               Decimal? @db.Decimal(24, 8)
+  var                Decimal? @db.Decimal(24, 8)
+  haircut            Decimal? @db.Decimal(24, 8)
+  peRatio            Decimal? @db.Decimal(24, 8)
+  oneYearChange      Decimal? @db.Decimal(24, 8)
+  ytdChange          Decimal? @db.Decimal(24, 8)
+  askPrice           Decimal? @db.Decimal(24, 8)
+  askVolume          BigInt?
+  bidPrice           Decimal? @db.Decimal(24, 8)
+  bidVolume          BigInt?
+  circuitBreakerLow  Decimal? @db.Decimal(24, 8)
+  circuitBreakerHigh Decimal? @db.Decimal(24, 8)
+  dayRangeLow        Decimal? @db.Decimal(24, 8)
+  dayRangeHigh       Decimal? @db.Decimal(24, 8)
+  week52RangeLow     Decimal? @db.Decimal(24, 8)
+  week52RangeHigh    Decimal? @db.Decimal(24, 8)
+  fetchedAt          DateTime @default(now())
+  createdAt          DateTime @default(now())
+
   @@unique([symbol, timestamp])
   @@index([symbol, timestamp])
   @@index([symbol, fetchedAt])
 }
 
 model SubscriptionPlan {
-  id            String   @id @default(uuid())
-  name          String
-  slug          String   @unique
-  priceMonthly  Decimal  @db.Decimal(10,2)
-  priceYearly   Decimal  @db.Decimal(10,2)
-  features      Json
-  createdAt     DateTime @default(now())
+  id                String   @id @default(uuid())
+  name              String   @unique
+  slug              String   @unique
+  description       String?
+  priceMonthly      Decimal  @db.Decimal(10, 2)
+  priceYearly       Decimal  @db.Decimal(10, 2)
+  isAlumniOnly      Boolean  @default(false)
+  isRecommended     Boolean  @default(false)
+  maxPortfolios     Int      @default(1)
+  maxCashInvestment Decimal  @default(0) @db.Decimal(24, 8) // In PKR
+  maxWatchlists     Int      @default(1)
+  maxAlerts         Int      @default(3)
+  features          Json // Additional features as JSON
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @default(now()) @updatedAt
+  users             User[]
+
+  @@index([slug])
+  @@index([isActive])
 }
 
+// Notification model for in-app and email notifications
+model Notification {
+  id          String           @id @default(uuid())
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  type        NotificationType
+  title       String
+  message     String
+  relatedId   String? // ID of related entity (transaction, payout, corporate action, etc.)
+  relatedType String? // Type of related entity
+  isRead      Boolean          @default(false)
+  isEmailSent Boolean          @default(false)
+  emailSentAt DateTime?
+  createdAt   DateTime         @default(now())
+  readAt      DateTime?
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+enum NotificationType {
+  CORPORATE_ACTION
+  DIVIDEND_PAYOUT
+  ALERT_TRIGGERED
+  TAX_REPORT
+  PAYMENT_DUE
+  PLAN_EXPIRY
+  SYSTEM
+  OTHER
+}
+
+// Tax Deduction model for tracking custom deductions
+model TaxDeduction {
+  id            String      @id @default(uuid())
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  transactionId String
+  category      String // e.g., "Brokerage Fee", "Commission", "Other"
+  amount        Decimal     @db.Decimal(24, 8)
+  description   String?
+  createdAt     DateTime    @default(now())
+
+  @@index([transactionId])
+}
+
+// Payout model for tracking automated and manual payouts
+model Payout {
+  id                String           @id @default(uuid())
+  portfolio         Portfolio        @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  portfolioId       String
+  holding           Holding?         @relation(fields: [holdingId], references: [id], onDelete: SetNull)
+  holdingId         String?
+  corporateAction   CorporateAction? @relation(fields: [corporateActionId], references: [id], onDelete: SetNull)
+  corporateActionId String?
+  symbol            String
+  type              PayoutType
+  amount            Decimal          @db.Decimal(24, 8)
+  quantity          Decimal          @db.Decimal(24, 8) // Number of shares for dividend calculation
+  rate              Decimal?         @db.Decimal(24, 8) // Dividend rate per share
+  withholdingTax    Decimal?         @db.Decimal(24, 8) // Withholding tax deducted
+  netAmount         Decimal          @db.Decimal(24, 8) // Net amount after tax
+  paymentDate       DateTime
+  recordDate        DateTime?
+  exDate            DateTime?
+  isAutomated       Boolean          @default(false) // true if calculated automatically
+  isReconciled      Boolean          @default(false) // true if manually verified
+  notes             String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([portfolioId])
+  @@index([symbol])
+  @@index([paymentDate])
+  @@index([isReconciled])
+}
+
+enum PayoutType {
+  DIVIDEND
+  BONUS
+  RIGHTS
+  OTHER
+}
+
+// System configuration for market data fetcher
+model SystemConfig {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String?
+  description String?
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?  // User ID who updated this config
+  
+  @@index([key])
+}

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { AdminController } from './admin.controller.js';
 import { RolePermissionsController } from './role-permissions.controller.js';
+import { PlansController } from './plans.controller.js';
 import { authenticate, requireRole } from '../auth/auth.middleware.js';
 
 const router = Router();
@@ -54,6 +55,14 @@ router.get('/fetcher/status', AdminController.getFetcherStatus);
 router.put('/fetcher/interval', AdminController.updateFetchInterval);
 
 /**
+ * @route   PUT /api/v1/admin/fetcher/time-window
+ * @desc    Set start and end time for fetching (24-hour format)
+ * @body    { startTime: string | null, endTime: string | null } e.g., { startTime: "09:00", endTime: "17:00" }
+ * @access  Private (Admin)
+ */
+router.put('/fetcher/time-window', AdminController.setTimeWindow);
+
+/**
  * @route   PUT /api/v1/admin/fetcher/schedule
  * @desc    Set scheduled time for fetching (24-hour format)
  * @body    { time: string | null } e.g., "14:30"
@@ -99,5 +108,47 @@ router.put('/role-permissions/bulk', RolePermissionsController.bulkUpsertPermiss
  * @access  Private (Admin)
  */
 router.delete('/role-permissions/:role/:page', RolePermissionsController.deletePermission);
+
+/**
+ * @route   GET /api/v1/admin/plans
+ * @desc    Get all plans
+ * @access  Private (Admin)
+ */
+router.get('/plans', PlansController.getAllPlans);
+
+/**
+ * @route   GET /api/v1/admin/plans/:id
+ * @desc    Get plan by ID
+ * @access  Private (Admin)
+ */
+router.get('/plans/:id', PlansController.getPlanById);
+
+/**
+ * @route   POST /api/v1/admin/plans
+ * @desc    Create a new plan
+ * @access  Private (Admin)
+ */
+router.post('/plans', PlansController.createPlanValidation, PlansController.createPlan);
+
+/**
+ * @route   PUT /api/v1/admin/plans/:id
+ * @desc    Update a plan
+ * @access  Private (Admin)
+ */
+router.put('/plans/:id', PlansController.updatePlanValidation, PlansController.updatePlan);
+
+/**
+ * @route   DELETE /api/v1/admin/plans/:id
+ * @desc    Delete a plan
+ * @access  Private (Admin)
+ */
+router.delete('/plans/:id', PlansController.deletePlan);
+
+/**
+ * @route   POST /api/v1/admin/users/:userId/assign-plan
+ * @desc    Assign plan to user
+ * @access  Private (Admin)
+ */
+router.post('/users/:userId/assign-plan', PlansController.assignPlanToUser);
 
 export default router;

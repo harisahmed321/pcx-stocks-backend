@@ -1,0 +1,1 @@
+{"version":3,"file":"priceIngestor.d.ts","sourceRoot":"","sources":["../../src/jobs/priceIngestor.ts"],"names":[],"mappings":"AACA,OAAO,EAAE,aAAa,EAAE,MAAM,6BAA6B,CAAC;AAI5D,qBAAa,aAAa;IACxB,OAAO,CAAC,aAAa,CAAgB;IACrC,OAAO,CAAC,QAAQ,CAA+B;IAC/C,OAAO,CAAC,QAAQ,CAAC,eAAe,CAAQ;gBAE5B,aAAa,EAAE,aAAa;IAIxC,KAAK;IAYL,IAAI;YAQU,YAAY;YASZ,gBAAgB;CA2B/B"}

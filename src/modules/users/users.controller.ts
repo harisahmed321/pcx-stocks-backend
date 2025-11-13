@@ -25,8 +25,8 @@ export class UsersController {
     body('role').optional().isIn(['USER', 'ADMIN']).withMessage('Role must be USER or ADMIN'),
     body('plan')
       .optional()
-      .isIn(['FREE', 'PRO', 'PREMIUM'])
-      .withMessage('Plan must be FREE, PRO, or PREMIUM'),
+      .isIn(['LITE', 'PRO', 'ELITE', 'PREMIUM'])
+      .withMessage('Plan must be LITE, PRO, ELITE, or PREMIUM'),
     body('paymentExpiration')
       .optional()
       .isISO8601()

@@ -8,7 +8,7 @@ export interface UpdateUserDto {
   phone?: string;
   cnic?: string;
   role?: 'USER' | 'ADMIN';
-  plan?: 'FREE' | 'PRO' | 'PREMIUM';
+  plan?: 'LITE' | 'PRO' | 'ELITE' | 'PREMIUM';
   paymentExpiration?: Date;
   nextPayment?: Date;
 }
