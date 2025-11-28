@@ -56,8 +56,8 @@ export function createApp(): Express {
 
   // Rate limiting
   const limiter = rateLimit({
-    windowMs: config.rateLimit.windowMs,
-    max: config.rateLimit.maxRequests,
+    windowMs: 60 * 1000, // 1 minute
+    max: 1000, // Increased limit for testing
     message: 'Too many requests from this IP, please try again later'
   });
 

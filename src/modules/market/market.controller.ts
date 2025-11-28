@@ -15,6 +15,16 @@ export class MarketController {
 
   static async getSymbols(req: Request, res: Response, next: NextFunction) {
     try {
+      const page = req.query.page ? parseInt(req.query.page as string) : undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
+
+      // If pagination parameters are provided, use paginated response
+      if (page && limit) {
+        const result = await MarketService.getSymbolsPaginated(page, limit);
+        return ResponseHelper.success(res, result.data, undefined, 200, result.pagination);
+      }
+
+      // Otherwise, return all symbols (backward compatibility)
       const symbols = await MarketService.getAvailableSymbols();
       return ResponseHelper.success(res, symbols);
     } catch (error) {

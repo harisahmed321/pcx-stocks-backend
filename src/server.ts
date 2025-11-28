@@ -4,6 +4,7 @@ import { MarketGateway } from './sockets/marketGateway.js';
 import { PriceIngestor } from './jobs/priceIngestor.js';
 import { SymbolsSyncJob } from './jobs/symbolsSyncJob.js';
 import { MarketDataFetcherJob } from './jobs/marketDataFetcherJob.js';
+import { MarketSimulatorJob } from './jobs/market-simulator.job.js';
 import { logger } from './utils/logger.js';
 import { prisma } from './prisma/client.js';
 import { redis, initializeRedis, isRedisAvailable } from './utils/redis.js';
@@ -34,6 +35,11 @@ export async function startServer() {
   await marketDataFetcherJob.start();
   logger.info('Market data fetcher job started');
 
+  // Start market simulator job (generates real-time price updates)
+  const marketSimulatorJob = new MarketSimulatorJob(marketGateway, 3000); // Update every 3 seconds
+  await marketSimulatorJob.start();
+  logger.info('Market simulator job started');
+
   // Inject job instance into admin controller
   setMarketDataFetcherJob(marketDataFetcherJob);
 
@@ -44,6 +50,7 @@ export async function startServer() {
     priceIngestor.stop();
     symbolsSyncJob.stop();
     marketDataFetcherJob.stop();
+    marketSimulatorJob.stop();
 
     httpServer.close(() => {
       logger.info('HTTP server closed');
@@ -65,5 +72,5 @@ export async function startServer() {
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 
-  return { httpServer, marketGateway, priceIngestor, symbolsSyncJob, marketDataFetcherJob };
+  return { httpServer, marketGateway, priceIngestor, symbolsSyncJob, marketDataFetcherJob, marketSimulatorJob };
 }

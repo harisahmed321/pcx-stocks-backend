@@ -51,6 +51,67 @@ export class MarketService {
     return symbolsWithPrices;
   }
 
+  static async getSymbolsPaginated(page: number = 1, limit: number = 50) {
+    const skip = (page - 1) * limit;
+
+    // Get total count
+    const total = await prisma.symbol.count({
+      where: {
+        isDebt: false
+      }
+    });
+
+    // Get paginated symbols
+    const symbols = await prisma.symbol.findMany({
+      where: {
+        isDebt: false
+      },
+      orderBy: {
+        symbol: 'asc'
+      },
+      select: {
+        symbol: true,
+        name: true,
+        sectorName: true,
+        isETF: true
+      },
+      skip,
+      take: limit
+    });
+
+    // Generate mock prices for each symbol
+    const symbolsWithPrices = symbols.map((s) => ({
+      ...s,
+      lastPrice: this.getBasePriceForSymbol(s.symbol),
+      currentPrice: this.getBasePriceForSymbol(s.symbol)
+    }));
+
+    return {
+      data: symbolsWithPrices,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+        hasMore: skip + symbols.length < total
+      }
+    };
+  }
+
+  static async getAllSymbolsForUpdates() {
+    // Get all trading symbols for price updates
+    const symbols = await prisma.symbol.findMany({
+      where: {
+        isDebt: false
+      },
+      select: {
+        symbol: true
+      }
+    });
+
+    return symbols.map(s => s.symbol);
+  }
+
   private static getBasePriceForSymbol(symbol: string): number {
     // Check cache first
     if (this.BASE_PRICE_CACHE[symbol]) {

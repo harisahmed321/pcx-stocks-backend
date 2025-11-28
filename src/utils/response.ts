@@ -5,14 +5,22 @@ export interface ApiResponse<T = any> {
   data?: T;
   errors?: any;
   message?: string;
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
 }
 
 export class ResponseHelper {
-  static success<T>(res: Response, data: T, message?: string, statusCode: number = 200) {
+  static success<T>(res: Response, data: T, message?: string, statusCode: number = 200, pagination?: any) {
     const response: ApiResponse<T> = {
       success: true,
       data,
-      message
+      message,
+      ...(pagination && { pagination })
     };
     return res.status(statusCode).json(response);
   }
