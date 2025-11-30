@@ -9,7 +9,7 @@ export declare class MarketDataFetcherJob {
     /**
      * Set custom fetch interval (in seconds)
      */
-    setInterval(seconds: number): void;
+    setInterval(seconds: number): Promise<void>;
     /**
      * Set scheduled time (24-hour format, e.g., "14:30")
      */
@@ -17,7 +17,7 @@ export declare class MarketDataFetcherJob {
     /**
      * Set start and end time for market data fetching (24-hour format, e.g., "09:00", "17:00")
      */
-    setTimeWindow(startTime: string | null, endTime: string | null): void;
+    setTimeWindow(startTime: string | null, endTime: string | null): Promise<void>;
     /**
      * Check if current time is within the allowed time window
      */
@@ -31,9 +31,17 @@ export declare class MarketDataFetcherJob {
      */
     fetchAllSymbols(): Promise<void>;
     /**
+     * Load configuration from database
+     */
+    loadConfiguration(): Promise<void>;
+    /**
+     * Save configuration to database
+     */
+    saveConfiguration(): Promise<void>;
+    /**
      * Start the background job
      */
-    start(): void;
+    start(): Promise<void>;
     /**
      * Stop the background job
      */

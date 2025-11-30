@@ -25,12 +25,64 @@ export declare class MarketService {
         sectorName: string | null;
         isETF: boolean;
     }[]>;
-    private static getBasePriceForSymbol;
-    private static generateBasePriceFromSymbol;
+    static getSymbolsPaginated(page?: number, limit?: number): Promise<{
+        data: {
+            lastPrice: number;
+            currentPrice: number;
+            change: number;
+            changePercent: number;
+            symbol: string;
+            name: string;
+            sectorName: string | null;
+            isETF: boolean;
+        }[];
+        pagination: {
+            page: number;
+            limit: number;
+            total: number;
+            totalPages: number;
+            hasMore: boolean;
+        };
+    }>;
+    static getAllSymbolsForUpdates(): Promise<string[]>;
     static getCurrentPrice(symbol: string): Promise<number>;
     static getMultiplePrices(symbols: string[]): Promise<Record<string, number>>;
     static getHistoricalData(symbol: string, from: Date, to: Date, interval?: string): Promise<MarketDataPoint[]>;
     static ingestMarketData(symbol: string, data: Omit<MarketDataPoint, 'symbol'>): Promise<void>;
-    static generateMockPrice(symbol: string): StockPrice;
+    /**
+     * Get symbol details from database and latest market data
+     */
+    /**
+     * Get symbol timeseries data from PSX API
+     */
+    static getSymbolTimeseries(symbol: string, type?: 'int' | 'eod'): Promise<any>;
+    static getSymbolDetailsFromPSX(symbol: string): Promise<{
+        symbol: string;
+        name: string;
+        price: {
+            last: number;
+            change: number;
+            changePercent: number;
+        };
+        stats: {
+            open: number;
+            high: number;
+            low: number;
+            volume: number;
+            ldcp: number;
+        };
+        chartData: any;
+        profile: {
+            sector: string;
+            about: string;
+            contact: {
+                address: string;
+                phone: string;
+                email: string;
+                website: string;
+            };
+        };
+        timestamp: Date;
+    }>;
 }
 //# sourceMappingURL=market.service.d.ts.map

@@ -28,7 +28,28 @@ export class WatchlistsService {
             },
             orderBy: { createdAt: 'desc' },
         });
-        return watchlists;
+        // Fetch market data for all items
+        const enrichedWatchlists = await Promise.all(watchlists.map(async (watchlist) => {
+            const itemsWithData = await Promise.all(watchlist.items.map(async (item) => {
+                const marketData = await prisma.marketData.findFirst({
+                    where: { symbol: item.symbol },
+                    orderBy: { timestamp: 'desc' },
+                });
+                return {
+                    ...item,
+                    marketData: marketData ? {
+                        price: Number(marketData.close),
+                        change: Number(marketData.close) - Number(marketData.ldcp || marketData.open),
+                        changePercent: marketData.ldcp
+                            ? ((Number(marketData.close) - Number(marketData.ldcp)) / Number(marketData.ldcp)) * 100
+                            : 0,
+                        volume: Number(marketData.volume)
+                    } : null
+                };
+            }));
+            return { ...watchlist, items: itemsWithData };
+        }));
+        return enrichedWatchlists;
     }
     static async getWatchlistById(userId, watchlistId) {
         const watchlist = await prisma.watchlist.findFirst({
@@ -45,7 +66,25 @@ export class WatchlistsService {
         if (!watchlist) {
             throw new AppError('Watchlist not found', 404);
         }
-        return watchlist;
+        // Fetch market data for items
+        const itemsWithData = await Promise.all(watchlist.items.map(async (item) => {
+            const marketData = await prisma.marketData.findFirst({
+                where: { symbol: item.symbol },
+                orderBy: { timestamp: 'desc' },
+            });
+            return {
+                ...item,
+                marketData: marketData ? {
+                    price: Number(marketData.close),
+                    change: Number(marketData.close) - Number(marketData.ldcp || marketData.open),
+                    changePercent: marketData.ldcp
+                        ? ((Number(marketData.close) - Number(marketData.ldcp)) / Number(marketData.ldcp)) * 100
+                        : 0,
+                    volume: Number(marketData.volume)
+                } : null
+            };
+        }));
+        return { ...watchlist, items: itemsWithData };
     }
     static async deleteWatchlist(userId, watchlistId) {
         const watchlist = await prisma.watchlist.findFirst({

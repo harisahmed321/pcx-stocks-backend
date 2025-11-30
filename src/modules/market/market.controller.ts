@@ -64,5 +64,19 @@ export class MarketController {
       next(error);
     }
   }
+
+  static async getSymbolDetails(req: Request, res: Response, next: NextFunction) {
+    try {
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return ResponseHelper.badRequest(res, errors.array(), 'Validation failed');
+      }
+
+      const details = await MarketService.getSymbolDetailsFromPSX(req.params.symbol.toUpperCase());
+      return ResponseHelper.success(res, details);
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 

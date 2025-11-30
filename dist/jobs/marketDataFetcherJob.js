@@ -13,13 +13,15 @@ export class MarketDataFetcherJob {
     /**
      * Set custom fetch interval (in seconds)
      */
-    setInterval(seconds) {
+    async setInterval(seconds) {
         this.fetchInterval = seconds * 1000;
         logger.info(`Market data fetch interval set to ${seconds} seconds`);
+        // Save to database
+        await this.saveConfiguration();
         // Restart with new interval if already running
         if (this.intervalId) {
             this.stop();
-            this.start();
+            await this.start();
         }
     }
     /**
@@ -32,10 +34,12 @@ export class MarketDataFetcherJob {
     /**
      * Set start and end time for market data fetching (24-hour format, e.g., "09:00", "17:00")
      */
-    setTimeWindow(startTime, endTime) {
+    async setTimeWindow(startTime, endTime) {
         this.startTime = startTime;
         this.endTime = endTime;
         logger.info(`Market data fetch time window set to: ${startTime || 'no start'} - ${endTime || 'no end'}`);
+        // Save to database
+        await this.saveConfiguration();
     }
     /**
      * Check if current time is within the allowed time window
@@ -231,11 +235,8 @@ export class MarketDataFetcherJob {
             logger.warn('Market data fetch already running, skipping...');
             return;
         }
-        // Check if we're within the allowed time window
-        if (!this.isWithinTimeWindow()) {
-            logger.debug(`Skipping market data fetch - outside time window (${this.startTime || 'no start'} - ${this.endTime || 'no end'})`);
-            return;
-        }
+        // Note: Time window check is now done at the interval callback level
+        // This method assumes it's only called when within the time window
         try {
             this.isRunning = true;
             logger.info('Starting market data fetch for all symbols...');
@@ -279,15 +280,108 @@ export class MarketDataFetcherJob {
         }
     }
     /**
+     * Load configuration from database
+     */
+    async loadConfiguration() {
+        try {
+            const configs = await prisma.systemConfig.findMany({
+                where: {
+                    key: {
+                        in: [
+                            'marketDataFetcher.startTime',
+                            'marketDataFetcher.endTime',
+                            'marketDataFetcher.interval'
+                        ]
+                    }
+                }
+            });
+            const configMap = new Map(configs.map((c) => [c.key, c.value]));
+            // Load time window (set directly without saving to avoid recursion)
+            const startTime = configMap.get('marketDataFetcher.startTime');
+            const endTime = configMap.get('marketDataFetcher.endTime');
+            if (startTime !== undefined || endTime !== undefined) {
+                this.startTime = startTime && typeof startTime === 'string' ? startTime : null;
+                this.endTime = endTime && typeof endTime === 'string' ? endTime : null;
+                logger.info(`Loaded time window from database: ${this.startTime || 'no start'} - ${this.endTime || 'no end'}`);
+            }
+            // Load interval (set directly without saving to avoid recursion)
+            const interval = configMap.get('marketDataFetcher.interval');
+            if (interval && typeof interval === 'string') {
+                const intervalSeconds = parseInt(interval, 10);
+                if (!isNaN(intervalSeconds) && intervalSeconds > 0) {
+                    this.fetchInterval = intervalSeconds * 1000;
+                    logger.info(`Loaded fetch interval from database: ${intervalSeconds}s`);
+                }
+            }
+        }
+        catch (error) {
+            logger.error('Error loading market data fetcher configuration:', error);
+            // Continue with defaults if loading fails
+        }
+    }
+    /**
+     * Save configuration to database
+     */
+    async saveConfiguration() {
+        try {
+            // Save time window
+            await prisma.systemConfig.upsert({
+                where: { key: 'marketDataFetcher.startTime' },
+                update: { value: this.startTime || null },
+                create: {
+                    key: 'marketDataFetcher.startTime',
+                    value: this.startTime || null,
+                    description: 'Start time for market data fetching (HH:mm format)'
+                }
+            });
+            await prisma.systemConfig.upsert({
+                where: { key: 'marketDataFetcher.endTime' },
+                update: { value: this.endTime || null },
+                create: {
+                    key: 'marketDataFetcher.endTime',
+                    value: this.endTime || null,
+                    description: 'End time for market data fetching (HH:mm format)'
+                }
+            });
+            // Save interval
+            await prisma.systemConfig.upsert({
+                where: { key: 'marketDataFetcher.interval' },
+                update: { value: (this.fetchInterval / 1000).toString() },
+                create: {
+                    key: 'marketDataFetcher.interval',
+                    value: (this.fetchInterval / 1000).toString(),
+                    description: 'Fetch interval in seconds'
+                }
+            });
+            logger.debug('Market data fetcher configuration saved to database');
+        }
+        catch (error) {
+            logger.error('Error saving market data fetcher configuration:', error);
+        }
+    }
+    /**
      * Start the background job
      */
-    start() {
+    async start() {
+        // Load configuration from database first
+        await this.loadConfiguration();
         logger.info(`Starting market data fetcher job (interval: ${this.fetchInterval / 1000}s)`);
         const runFetch = () => {
-            this.fetchAllSymbols();
+            // Check time window before running
+            if (this.isWithinTimeWindow()) {
+                this.fetchAllSymbols();
+            }
+            else {
+                logger.debug(`Skipping market data fetch - outside time window (${this.startTime || 'no start'} - ${this.endTime || 'no end'})`);
+            }
         };
-        // Run immediately on startup
-        runFetch();
+        // Run immediately on startup only if within time window
+        if (this.isWithinTimeWindow()) {
+            runFetch();
+        }
+        else {
+            logger.info(`Skipping initial fetch - outside time window (${this.startTime || 'no start'} - ${this.endTime || 'no end'})`);
+        }
         // Schedule periodic fetches
         this.intervalId = setInterval(runFetch, this.fetchInterval);
     }

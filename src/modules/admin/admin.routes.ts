@@ -6,7 +6,15 @@ import { authenticate, requireRole } from '../auth/auth.middleware.js';
 
 const router = Router();
 
-// All admin routes require authentication and admin role
+// Public authenticated routes (no admin role required)
+/**
+ * @route   GET /api/v1/admin/market-data/latest
+ * @desc    Get latest market data for all symbols (one record per symbol)
+ * @access  Private (All authenticated users)
+ */
+router.get('/market-data/latest', authenticate, AdminController.getLatestMarketData);
+
+// All remaining admin routes require authentication and admin role
 router.use(authenticate);
 router.use(requireRole('ADMIN'));
 

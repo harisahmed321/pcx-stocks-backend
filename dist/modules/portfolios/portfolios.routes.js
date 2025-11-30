@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { PortfoliosController } from './portfolios.controller.js';
+import { HoldingsController } from '../holdings/holdings.controller.js';
+import { TransactionsController } from '../transactions/transactions.controller.js';
 import { authenticate } from '../auth/auth.middleware.js';
 const router = Router();
 // All routes require authentication
@@ -34,5 +36,10 @@ router.patch('/:id', PortfoliosController.updateValidation, PortfoliosController
  * @access  Private
  */
 router.delete('/:id', PortfoliosController.idValidation, PortfoliosController.delete);
+// Sub-resources routes
+router.get('/:portfolioId/holdings', HoldingsController.portfolioIdValidation, HoldingsController.getByPortfolio);
+router.post('/:portfolioId/holdings', HoldingsController.createValidation, HoldingsController.create);
+router.get('/:portfolioId/transactions', TransactionsController.portfolioIdValidation, TransactionsController.getByPortfolio);
+router.post('/:portfolioId/transactions', TransactionsController.createValidation, TransactionsController.create);
 export default router;
 //# sourceMappingURL=portfolios.routes.js.map

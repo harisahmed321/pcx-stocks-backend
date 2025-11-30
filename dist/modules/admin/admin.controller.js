@@ -113,7 +113,7 @@ export class AdminController {
             if (!marketDataFetcherJobInstance) {
                 return ResponseHelper.error(res, null, 'Market data fetcher job not initialized', 500);
             }
-            marketDataFetcherJobInstance.setInterval(interval);
+            await marketDataFetcherJobInstance.setInterval(interval);
             return ResponseHelper.success(res, { interval }, `Fetch interval updated to ${interval} seconds`);
         }
         catch (error) {
@@ -138,7 +138,7 @@ export class AdminController {
             if (!marketDataFetcherJobInstance) {
                 return ResponseHelper.error(res, null, 'Market data fetcher job not initialized', 500);
             }
-            marketDataFetcherJobInstance.setTimeWindow(startTime || null, endTime || null);
+            await marketDataFetcherJobInstance.setTimeWindow(startTime || null, endTime || null);
             return ResponseHelper.success(res, { startTime: startTime || null, endTime: endTime || null }, `Time window updated: ${startTime || 'no start'} - ${endTime || 'no end'}`);
         }
         catch (error) {
@@ -226,6 +226,37 @@ export class AdminController {
         catch (error) {
             logger.error('Error getting symbols:', error);
             return ResponseHelper.error(res, null, 'Failed to get symbols', 500);
+        }
+    }
+    /**
+     * Get latest market data for all symbols (one record per symbol)
+     */
+    static async getLatestMarketData(req, res) {
+        try {
+            // Get all symbols
+            const symbols = await prisma.symbol.findMany({
+                where: { isDebt: false },
+                select: { symbol: true },
+                orderBy: { symbol: 'asc' }
+            });
+            // For each symbol, get the latest market data
+            const latestDataPromises = symbols.map(async (s) => {
+                const latestData = await prisma.marketData.findFirst({
+                    where: { symbol: s.symbol },
+                    orderBy: { timestamp: 'desc' }
+                });
+                return latestData;
+            });
+            const results = await Promise.all(latestDataPromises);
+            // Filter out nulls and serialize
+            const latestData = results
+                .filter((data) => data !== null)
+                .map(serializeMarketData);
+            return ResponseHelper.success(res, latestData, 'Latest market data retrieved successfully');
+        }
+        catch (error) {
+            logger.error('Error getting latest market data:', error);
+            return ResponseHelper.error(res, null, 'Failed to get latest market data', 500);
         }
     }
 }

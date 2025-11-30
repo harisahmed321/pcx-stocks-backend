@@ -281,4 +281,43 @@ export class AdminController {
       return ResponseHelper.error(res, null, 'Failed to get symbols', 500);
     }
   }
+
+  /**
+   * Get latest market data for all symbols (one record per symbol)
+   */
+  static async getLatestMarketData(req: Request, res: Response) {
+    try {
+      // Get all symbols
+      const symbols = await prisma.symbol.findMany({
+        where: { isDebt: false },
+        select: { symbol: true },
+        orderBy: { symbol: 'asc' }
+      });
+
+      // For each symbol, get the latest market data
+      const latestDataPromises = symbols.map(async (s) => {
+        const latestData = await prisma.marketData.findFirst({
+          where: { symbol: s.symbol },
+          orderBy: { timestamp: 'desc' }
+        });
+        return latestData;
+      });
+
+      const results = await Promise.all(latestDataPromises);
+      
+      // Filter out nulls and serialize
+      const latestData = results
+        .filter((data) => data !== null)
+        .map(serializeMarketData);
+
+      return ResponseHelper.success(
+        res,
+        latestData,
+        'Latest market data retrieved successfully'
+      );
+    } catch (error) {
+      logger.error('Error getting latest market data:', error);
+      return ResponseHelper.error(res, null, 'Failed to get latest market data', 500);
+    }
+  }
 }

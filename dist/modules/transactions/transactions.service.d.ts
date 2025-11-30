@@ -13,28 +13,32 @@ export declare class TransactionsService {
         symbol: string;
         id: string;
         createdAt: Date;
+        type: import(".prisma/client").$Enums.TransactionType;
         portfolioId: string;
         quantity: import("@prisma/client/runtime/library.js").Decimal;
         holdingId: string | null;
-        type: import(".prisma/client").$Enums.TransactionType;
         price: import("@prisma/client/runtime/library.js").Decimal;
         fees: import("@prisma/client/runtime/library.js").Decimal;
         date: Date;
         notes: string | null;
+        capitalGainsTax: import("@prisma/client/runtime/library.js").Decimal | null;
+        withholdingTax: import("@prisma/client/runtime/library.js").Decimal | null;
     }>;
     static getPortfolioTransactions(userId: string, portfolioId: string, page?: number, limit?: number): Promise<{
         transactions: {
             symbol: string;
             id: string;
             createdAt: Date;
+            type: import(".prisma/client").$Enums.TransactionType;
             portfolioId: string;
             quantity: import("@prisma/client/runtime/library.js").Decimal;
             holdingId: string | null;
-            type: import(".prisma/client").$Enums.TransactionType;
             price: import("@prisma/client/runtime/library.js").Decimal;
             fees: import("@prisma/client/runtime/library.js").Decimal;
             date: Date;
             notes: string | null;
+            capitalGainsTax: import("@prisma/client/runtime/library.js").Decimal | null;
+            withholdingTax: import("@prisma/client/runtime/library.js").Decimal | null;
         }[];
         pagination: {
             page: number;

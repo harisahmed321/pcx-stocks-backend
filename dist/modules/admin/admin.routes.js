@@ -60,6 +60,12 @@ router.put('/fetcher/time-window', AdminController.setTimeWindow);
  */
 router.put('/fetcher/schedule', AdminController.setScheduledTime);
 /**
+ * @route   GET /api/v1/admin/market-data/latest
+ * @desc    Get latest market data for all symbols (one record per symbol)
+ * @access  Private (Admin)
+ */
+router.get('/market-data/latest', AdminController.getLatestMarketData);
+/**
  * @route   GET /api/v1/admin/role-permissions
  * @desc    Get all role permissions
  * @access  Private (Admin)

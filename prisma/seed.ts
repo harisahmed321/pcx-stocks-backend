@@ -309,7 +309,72 @@ async function main() {
     }
   });
 
+  // Add more portfolios for Elite and Premium users (within their plan limits)
+  const elitePortfolio3 = await prisma.portfolio.create({
+    data: {
+      userId: users[2].id,
+      name: 'Banking Sector',
+      description: 'Banking stocks portfolio',
+      cashBalance: 750000
+    }
+  });
+
+  const elitePortfolio4 = await prisma.portfolio.create({
+    data: {
+      userId: users[2].id,
+      name: 'Cement Sector',
+      description: 'Cement industry investments',
+      cashBalance: 600000
+    }
+  });
+
+  const elitePortfolio5 = await prisma.portfolio.create({
+    data: {
+      userId: users[2].id,
+      name: 'Diversified Portfolio',
+      description: 'Mixed sector holdings',
+      cashBalance: 400000
+    }
+  });
+
+  const premiumPortfolio3 = await prisma.portfolio.create({
+    data: {
+      userId: users[3].id,
+      name: 'Blue Chip Stocks',
+      description: 'Large cap stable companies',
+      cashBalance: 1500000
+    }
+  });
+
+  const premiumPortfolio4 = await prisma.portfolio.create({
+    data: {
+      userId: users[3].id,
+      name: 'Oil & Gas',
+      description: 'Energy sector focused',
+      cashBalance: 800000
+    }
+  });
+
+  const premiumPortfolio5 = await prisma.portfolio.create({
+    data: {
+      userId: users[3].id,
+      name: 'Tech & Growth',
+      description: 'Technology and growth stocks',
+      cashBalance: 500000
+    }
+  });
+
   // Create Holdings for different users
+  // First, fetch latest market data for realistic avg buy prices
+  const getLatestPrice = async (symbol: string): Promise<number> => {
+    const latestData = await prisma.marketData.findFirst({
+      where: { symbol },
+      orderBy: { timestamp: 'desc' }
+    });
+    // If no market data, use a fallback price
+    return latestData ? Number(latestData.close) : 100;
+  };
+
   const holdings = await Promise.all([
     // Lite User Holdings
     prisma.holding.create({
@@ -318,7 +383,7 @@ async function main() {
         symbol: 'HBL',
         name: 'Habib Bank Limited',
         quantity: 50,
-        avgBuyPrice: 85.5
+        avgBuyPrice: (await getLatestPrice('HBL')) * 0.95 // 5% below current price
       }
     }),
     // Pro User Holdings
@@ -328,7 +393,7 @@ async function main() {
         symbol: 'PSO',
         name: 'Pakistan State Oil',
         quantity: 100,
-        avgBuyPrice: 245.5
+        avgBuyPrice: (await getLatestPrice('PSO')) * 0.92 // 8% below current price
       }
     }),
     prisma.holding.create({
@@ -337,7 +402,7 @@ async function main() {
         symbol: 'OGDC',
         name: 'Oil & Gas Development Company',
         quantity: 200,
-        avgBuyPrice: 148.75
+        avgBuyPrice: (await getLatestPrice('OGDC')) * 0.97 // 3% below current price
       }
     }),
     prisma.holding.create({
@@ -346,16 +411,16 @@ async function main() {
         symbol: 'LUCK',
         name: 'Lucky Cement',
         quantity: 50,
-        avgBuyPrice: 795.0
+        avgBuyPrice: (await getLatestPrice('LUCK')) * 0.9 // 10% below current price
       }
     }),
     prisma.holding.create({
       data: {
         portfolioId: proPortfolio2.id,
-        symbol: 'ENGRO',
-        name: 'Engro Corporation',
+        symbol: 'SYS',
+        name: 'Systems Limited',
         quantity: 150,
-        avgBuyPrice: 295.5
+        avgBuyPrice: (await getLatestPrice('SYS')) * 0.88 // 12% below current price
       }
     }),
     prisma.holding.create({
@@ -364,7 +429,7 @@ async function main() {
         symbol: 'PPL',
         name: 'Pakistan Petroleum Limited',
         quantity: 100,
-        avgBuyPrice: 120.0
+        avgBuyPrice: (await getLatestPrice('PPL')) * 0.93 // 7% below current price
       }
     }),
     // Elite User Holdings
@@ -374,7 +439,7 @@ async function main() {
         symbol: 'UBL',
         name: 'United Bank Limited',
         quantity: 200,
-        avgBuyPrice: 180.0
+        avgBuyPrice: (await getLatestPrice('UBL')) * 0.94 // 6% below current price
       }
     }),
     prisma.holding.create({
@@ -383,26 +448,138 @@ async function main() {
         symbol: 'MCB',
         name: 'Muslim Commercial Bank',
         quantity: 150,
-        avgBuyPrice: 195.0
+        avgBuyPrice: (await getLatestPrice('MCB')) * 0.91 // 9% below current price
       }
     }),
     // Premium User Holdings
     prisma.holding.create({
       data: {
         portfolioId: premiumPortfolio1.id,
-        symbol: 'FCCL',
-        name: 'Fauji Cement Company',
+        symbol: 'FFC',
+        name: 'Fauji Fertilizer Company',
         quantity: 500,
-        avgBuyPrice: 45.0
+        avgBuyPrice: (await getLatestPrice('FFC')) * 0.85 // 15% below current price
       }
     }),
     prisma.holding.create({
       data: {
         portfolioId: premiumPortfolio2.id,
-        symbol: 'ATRL',
-        name: 'Attock Refinery Limited',
+        symbol: 'HUBC',
+        name: 'Hub Power Company',
         quantity: 300,
-        avgBuyPrice: 350.0
+        avgBuyPrice: (await getLatestPrice('HUBC')) * 0.96 // 4% below current price
+      }
+    }),
+    // Additional Elite User Holdings (for more portfolios)
+    prisma.holding.create({
+      data: {
+        portfolioId: elitePortfolio3.id,
+        symbol: 'HBL',
+        name: 'Habib Bank Limited',
+        quantity: 250,
+        avgBuyPrice: (await getLatestPrice('HBL')) * 0.89 // 11% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: elitePortfolio3.id,
+        symbol: 'BAFL',
+        name: 'Bank Alfalah',
+        quantity: 400,
+        avgBuyPrice: (await getLatestPrice('BAFL')) * 0.92 // 8% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: elitePortfolio4.id,
+        symbol: 'LUCK',
+        name: 'Lucky Cement',
+        quantity: 80,
+        avgBuyPrice: (await getLatestPrice('LUCK')) * 0.87 // 13% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: elitePortfolio5.id,
+        symbol: 'ENGRO',
+        name: 'Engro Corporation',
+        quantity: 180,
+        avgBuyPrice: (await getLatestPrice('ENGRO')) * 0.91 // 9% below current price
+      }
+    }),
+    // Additional Premium User Holdings (for more portfolios)
+    prisma.holding.create({
+      data: {
+        portfolioId: premiumPortfolio3.id,
+        symbol: 'PSO',
+        name: 'Pakistan State Oil',
+        quantity: 200,
+        avgBuyPrice: (await getLatestPrice('PSO')) * 0.88 // 12% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: premiumPortfolio3.id,
+        symbol: 'OGDC',
+        name: 'Oil & Gas Development',
+        quantity: 300,
+        avgBuyPrice: (await getLatestPrice('OGDC')) * 0.93 // 7% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: premiumPortfolio4.id,
+        symbol: 'PPL',
+        name: 'Pakistan Petroleum',
+        quantity: 250,
+        avgBuyPrice: (await getLatestPrice('PPL')) * 0.9 // 10% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: premiumPortfolio5.id,
+        symbol: 'SYS',
+        name: 'Systems Limited',
+        quantity: 120,
+        avgBuyPrice: (await getLatestPrice('SYS')) * 0.85 // 15% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: premiumPortfolio5.id,
+        symbol: 'TRG',
+        name: 'TRG Pakistan',
+        quantity: 200,
+        avgBuyPrice: (await getLatestPrice('TRG')) * 0.92 // 8% below current price
+      }
+    }),
+    // Additional Lite User holding
+    prisma.holding.create({
+      data: {
+        portfolioId: litePortfolio.id,
+        symbol: 'MCB',
+        name: 'MCB Bank',
+        quantity: 30,
+        avgBuyPrice: (await getLatestPrice('MCB')) * 0.94 // 6% below current price
+      }
+    }),
+    // Additional Pro User holdings
+    prisma.holding.create({
+      data: {
+        portfolioId: proPortfolio2.id,
+        symbol: 'TRG',
+        name: 'TRG Pakistan',
+        quantity: 100,
+        avgBuyPrice: (await getLatestPrice('TRG')) * 0.9 // 10% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: proPortfolio3.id,
+        symbol: 'HUBC',
+        name: 'Hub Power Company',
+        quantity: 200,
+        avgBuyPrice: (await getLatestPrice('HUBC')) * 0.95 // 5% below current price
       }
     })
   ]);
@@ -414,11 +591,11 @@ async function main() {
     prisma.transaction.create({
       data: {
         portfolioId: proPortfolio1.id,
-        holdingId: holdings[0].id,
+        holdingId: holdings[1].id,
         type: TransactionType.BUY,
         symbol: 'PSO',
         quantity: 100,
-        price: 245.5,
+        price: holdings[1].avgBuyPrice,
         fees: 500,
         date: new Date('2024-01-15'),
         notes: 'Initial investment'
@@ -427,11 +604,11 @@ async function main() {
     prisma.transaction.create({
       data: {
         portfolioId: proPortfolio1.id,
-        holdingId: holdings[1].id,
+        holdingId: holdings[2].id,
         type: TransactionType.BUY,
         symbol: 'OGDC',
         quantity: 200,
-        price: 148.75,
+        price: holdings[2].avgBuyPrice,
         fees: 600,
         date: new Date('2024-02-01'),
         notes: 'Added to portfolio'
@@ -440,11 +617,11 @@ async function main() {
     prisma.transaction.create({
       data: {
         portfolioId: proPortfolio1.id,
-        holdingId: holdings[2].id,
+        holdingId: holdings[3].id,
         type: TransactionType.BUY,
         symbol: 'LUCK',
         quantity: 50,
-        price: 795.0,
+        price: holdings[3].avgBuyPrice,
         fees: 800,
         date: new Date('2024-03-10'),
         notes: 'Cement sector investment'
@@ -487,6 +664,27 @@ async function main() {
     data: {
       userId: users[2].id, // Elite User
       name: 'Alumni Picks'
+    }
+  });
+
+  const watchlist6 = await prisma.watchlist.create({
+    data: {
+      userId: users[3].id, // Premium User
+      name: 'High Dividend Stocks'
+    }
+  });
+
+  const watchlist7 = await prisma.watchlist.create({
+    data: {
+      userId: users[3].id, // Premium User
+      name: 'Growth Opportunities'
+    }
+  });
+
+  const watchlist8 = await prisma.watchlist.create({
+    data: {
+      userId: users[2].id, // Elite User
+      name: 'Cement & Construction'
     }
   });
 
@@ -550,12 +748,64 @@ async function main() {
         symbol: 'OGDC',
         notes: 'Energy sector pick'
       }
+    }),
+    // Premium User Watchlists
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist6.id,
+        symbol: 'FFC',
+        notes: 'Strong dividend payer'
+      }
+    }),
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist6.id,
+        symbol: 'HUBC',
+        notes: 'Utility sector dividend'
+      }
+    }),
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist7.id,
+        symbol: 'SYS',
+        notes: 'IT growth potential'
+      }
+    }),
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist7.id,
+        symbol: 'TRG',
+        notes: 'BPO sector leader'
+      }
+    }),
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist8.id,
+        symbol: 'LUCK',
+        notes: 'Leading cement company'
+      }
+    }),
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist8.id,
+        symbol: 'DGKC',
+        notes: 'Cement sector'
+      }
     })
   ]);
 
   console.log('✅ Created watchlists');
 
   // Create Alerts for different users
+  // Get target prices based on current market data
+  const getTargetPrice = async (symbol: string, multiplier: number): Promise<number> => {
+    const latestData = await prisma.marketData.findFirst({
+      where: { symbol },
+      orderBy: { timestamp: 'desc' }
+    });
+    return latestData ? Number(latestData.close) * multiplier : 100 * multiplier;
+  };
+
   await Promise.all([
     // Pro User Alerts (within plan limit of 10)
     prisma.alert.create({
@@ -563,7 +813,7 @@ async function main() {
         userId: users[1].id,
         symbol: 'PSO',
         alertType: AlertType.PRICE,
-        condition: '> 260'
+        condition: `> ${Math.round(await getTargetPrice('PSO', 1.05))}`
       }
     }),
     prisma.alert.create({
@@ -571,7 +821,7 @@ async function main() {
         userId: users[1].id,
         symbol: 'OGDC',
         alertType: AlertType.PRICE,
-        condition: '< 140'
+        condition: `< ${Math.round(await getTargetPrice('OGDC', 0.95))}`
       }
     }),
     prisma.alert.create({
@@ -579,7 +829,7 @@ async function main() {
         userId: users[1].id,
         symbol: 'HBL',
         alertType: AlertType.PRICE,
-        condition: '> 190'
+        condition: `> ${Math.round(await getTargetPrice('HBL', 1.1))}`
       }
     }),
     // Lite User Alerts (within plan limit of 3)
@@ -588,7 +838,7 @@ async function main() {
         userId: users[0].id,
         symbol: 'HBL',
         alertType: AlertType.PRICE,
-        condition: '> 90'
+        condition: `> ${Math.round(await getTargetPrice('HBL', 1.08))}`
       }
     }),
     // Elite User Alerts (within plan limit of 10)
@@ -597,66 +847,237 @@ async function main() {
         userId: users[2].id,
         symbol: 'UBL',
         alertType: AlertType.PRICE,
-        condition: '> 200'
+        condition: `> ${Math.round(await getTargetPrice('UBL', 1.12))}`
       }
     }),
     // Premium User Alerts (within plan limit of 15)
     prisma.alert.create({
       data: {
         userId: users[3].id,
-        symbol: 'FCCL',
+        symbol: 'FFC',
         alertType: AlertType.PRICE,
-        condition: '> 50'
+        condition: `> ${Math.round(await getTargetPrice('FFC', 1.15))}`
       }
     }),
     prisma.alert.create({
       data: {
         userId: users[3].id,
-        symbol: 'ATRL',
+        symbol: 'HUBC',
         alertType: AlertType.PRICE,
-        condition: '< 340'
+        condition: `< ${Math.round(await getTargetPrice('HUBC', 0.9))}`
+      }
+    }),
+    // More Pro User Alerts
+    prisma.alert.create({
+      data: {
+        userId: users[1].id,
+        symbol: 'SYS',
+        alertType: AlertType.PRICE,
+        condition: `> ${Math.round(await getTargetPrice('SYS', 1.08))}`
+      }
+    }),
+    prisma.alert.create({
+      data: {
+        userId: users[1].id,
+        symbol: 'LUCK',
+        alertType: AlertType.PRICE,
+        condition: `< ${Math.round(await getTargetPrice('LUCK', 0.92))}`
+      }
+    }),
+    // More Elite User Alerts
+    prisma.alert.create({
+      data: {
+        userId: users[2].id,
+        symbol: 'ENGRO',
+        alertType: AlertType.PRICE,
+        condition: `> ${Math.round(await getTargetPrice('ENGRO', 1.15))}`
+      }
+    }),
+    prisma.alert.create({
+      data: {
+        userId: users[2].id,
+        symbol: 'BAFL',
+        alertType: AlertType.PRICE,
+        condition: `< ${Math.round(await getTargetPrice('BAFL', 0.88))}`
+      }
+    }),
+    // More Premium User Alerts
+    prisma.alert.create({
+      data: {
+        userId: users[3].id,
+        symbol: 'PSO',
+        alertType: AlertType.PRICE,
+        condition: `> ${Math.round(await getTargetPrice('PSO', 1.12))}`
+      }
+    }),
+    prisma.alert.create({
+      data: {
+        userId: users[3].id,
+        symbol: 'TRG',
+        alertType: AlertType.PRICE,
+        condition: `> ${Math.round(await getTargetPrice('TRG', 1.2))}`
+      }
+    }),
+    prisma.alert.create({
+      data: {
+        userId: users[3].id,
+        symbol: 'PPL',
+        alertType: AlertType.PRICE,
+        condition: `< ${Math.round(await getTargetPrice('PPL', 0.85))}`
       }
     })
   ]);
 
   console.log('✅ Created alerts');
 
-  // Create Historical Market Data (last 30 days for PSO)
-  const today = new Date();
-  const marketDataPromises = [];
+  // ============================================
+  // VERIFICATION: Calculate Overview Screen Metrics
+  // ============================================
+  console.log('\n🔍 Verifying Overview Screen Calculations...\n');
 
-  for (let i = 30; i >= 0; i--) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    date.setHours(0, 0, 0, 0);
+  // Helper function to get current price
+  const getCurrentPrice = async (symbol: string): Promise<number> => {
+    const latestData = await prisma.marketData.findFirst({
+      where: { symbol },
+      orderBy: { timestamp: 'desc' }
+    });
+    return latestData ? Number(latestData.close) : 0;
+  };
 
-    const basePrice = 250;
-    const variation = Math.sin(i / 5) * 10 + (Math.random() - 0.5) * 5;
-    const open = basePrice + variation;
-    const close = open + (Math.random() - 0.5) * 8;
-    const high = Math.max(open, close) + Math.random() * 3;
-    const low = Math.min(open, close) - Math.random() * 3;
+  // Helper function to get previous close (LDCP)
+  const getPreviousClose = async (symbol: string): Promise<number> => {
+    const latestData = await prisma.marketData.findFirst({
+      where: { symbol },
+      orderBy: { timestamp: 'desc' }
+    });
+    return latestData && latestData.ldcp
+      ? Number(latestData.ldcp)
+      : latestData
+        ? Number(latestData.close)
+        : 0;
+  };
 
-    marketDataPromises.push(
-      prisma.marketData.create({
-        data: {
-          symbol: 'PSO',
-          timestamp: date,
-          open,
-          high,
-          low,
-          close,
-          volume: Math.floor(Math.random() * 1000000) + 500000
-        }
-      })
-    );
+  // Verify calculations for Pro User (has multiple portfolios)
+  const proUser = users[1];
+  const proUserPortfolios = await prisma.portfolio.findMany({
+    where: { userId: proUser.id },
+    include: { holdings: true }
+  });
+
+  let totalInvestmentAmount = 0;
+  let totalTodaysReturn = 0;
+  let totalAvailableCash = 0;
+  let totalReturn = 0;
+
+  console.log(`📊 Pro User (${proUser.email}) Overview:`);
+  console.log('─'.repeat(70));
+
+  for (const portfolio of proUserPortfolios) {
+    console.log(`\n  Portfolio: "${portfolio.name}"`);
+
+    let portfolioValue = 0;
+    let portfolioTodaysReturn = 0;
+    let portfolioTotalReturn = 0;
+
+    for (const holding of portfolio.holdings) {
+      const currentPrice = await getCurrentPrice(holding.symbol);
+      const previousClose = await getPreviousClose(holding.symbol);
+      const quantity = Number(holding.quantity);
+      const avgBuyPrice = Number(holding.avgBuyPrice);
+
+      const currentValue = currentPrice * quantity;
+      const todaysChange = (currentPrice - previousClose) * quantity;
+      const totalPnL = (currentPrice - avgBuyPrice) * quantity;
+
+      portfolioValue += currentValue;
+      portfolioTodaysReturn += todaysChange;
+      portfolioTotalReturn += totalPnL;
+
+      console.log(`    ${holding.symbol}: ${quantity} shares @ ${currentPrice.toFixed(2)} PKR`);
+      console.log(`      Current Value: ${currentValue.toFixed(2)} PKR`);
+      console.log(
+        `      Today's Change: ${todaysChange >= 0 ? '+' : ''}${todaysChange.toFixed(2)} PKR`
+      );
+      console.log(
+        `      Total P&L: ${totalPnL >= 0 ? '+' : ''}${totalPnL.toFixed(2)} PKR (${((totalPnL / (avgBuyPrice * quantity)) * 100).toFixed(2)}%)`
+      );
+    }
+
+    totalInvestmentAmount += portfolioValue;
+    totalTodaysReturn += portfolioTodaysReturn;
+    totalAvailableCash += Number(portfolio.cashBalance);
+    totalReturn += portfolioTotalReturn;
+
+    console.log(`  Portfolio Total Value: ${portfolioValue.toFixed(2)} PKR`);
+    console.log(`  Portfolio Cash: ${Number(portfolio.cashBalance).toFixed(2)} PKR`);
   }
 
-  await Promise.all(marketDataPromises);
+  console.log('\n' + '═'.repeat(70));
+  console.log('📈 OVERVIEW SCREEN CALCULATIONS (Pro User):');
+  console.log('═'.repeat(70));
+  console.log(`  a. Investment Amount:  ${totalInvestmentAmount.toFixed(2)} PKR`);
+  console.log(`     (Sum of all holdings' current market value)`);
+  console.log(
+    `  b. Today's Return:     ${totalTodaysReturn >= 0 ? '+' : ''}${totalTodaysReturn.toFixed(2)} PKR`
+  );
+  console.log(`     (Based on current price vs. previous close)`);
+  console.log(`  c. Available Cash:     ${totalAvailableCash.toFixed(2)} PKR`);
+  console.log(`     (Sum of cash balance across all portfolios)`);
+  console.log(
+    `  d. Total Return:       ${totalReturn >= 0 ? '+' : ''}${totalReturn.toFixed(2)} PKR`
+  );
+  console.log(`     (P&L: Current value - Purchase cost)`);
+  const totalReturnPercent =
+    totalInvestmentAmount > 0 ? (totalReturn / (totalInvestmentAmount - totalReturn)) * 100 : 0;
+  console.log(`     (${totalReturnPercent >= 0 ? '+' : ''}${totalReturnPercent.toFixed(2)}%)`);
+  console.log('═'.repeat(70));
 
-  console.log('✅ Created historical market data');
+  // Verify Premium User as well
+  const premiumUser = users[3];
+  const premiumUserPortfolios = await prisma.portfolio.findMany({
+    where: { userId: premiumUser.id },
+    include: { holdings: true }
+  });
 
-  console.log('🎉 Seeding completed successfully!');
+  let premiumInvestment = 0;
+  let premiumTodaysReturn = 0;
+  let premiumCash = 0;
+  let premiumTotalReturn = 0;
+
+  for (const portfolio of premiumUserPortfolios) {
+    for (const holding of portfolio.holdings) {
+      const currentPrice = await getCurrentPrice(holding.symbol);
+      const previousClose = await getPreviousClose(holding.symbol);
+      const quantity = Number(holding.quantity);
+      const avgBuyPrice = Number(holding.avgBuyPrice);
+
+      premiumInvestment += currentPrice * quantity;
+      premiumTodaysReturn += (currentPrice - previousClose) * quantity;
+      premiumTotalReturn += (currentPrice - avgBuyPrice) * quantity;
+    }
+    premiumCash += Number(portfolio.cashBalance);
+  }
+
+  console.log(`\n📈 OVERVIEW SCREEN CALCULATIONS (Premium User - ${premiumUser.email}):`);
+  console.log('═'.repeat(70));
+  console.log(`  a. Investment Amount:  ${premiumInvestment.toFixed(2)} PKR`);
+  console.log(
+    `  b. Today's Return:     ${premiumTodaysReturn >= 0 ? '+' : ''}${premiumTodaysReturn.toFixed(2)} PKR`
+  );
+  console.log(`  c. Available Cash:     ${premiumCash.toFixed(2)} PKR`);
+  console.log(
+    `  d. Total Return:       ${premiumTotalReturn >= 0 ? '+' : ''}${premiumTotalReturn.toFixed(2)} PKR`
+  );
+  const premiumReturnPercent =
+    premiumInvestment > 0
+      ? (premiumTotalReturn / (premiumInvestment - premiumTotalReturn)) * 100
+      : 0;
+  console.log(`     (${premiumReturnPercent >= 0 ? '+' : ''}${premiumReturnPercent.toFixed(2)}%)`);
+  console.log('═'.repeat(70));
+
+  console.log('\n✅ Overview calculations verified!');
+
+  console.log('\n🎉 Seeding completed successfully!');
   console.log('\n📧 Test user credentials (all passwords: password123):');
   console.log('\nLite Plan:');
   console.log('  - Lite User: lite@example.com');

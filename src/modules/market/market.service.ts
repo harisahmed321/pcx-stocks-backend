@@ -1,6 +1,7 @@
 import { prisma } from '../../prisma/client.js';
 import { redis, isRedisAvailable } from '../../utils/redis.js';
 import { AppError } from '../../utils/errorHandler.js';
+import axios from 'axios';
 
 export interface StockPrice {
   symbol: string;
@@ -42,11 +43,20 @@ export class MarketService {
       }
     });
 
-    // Generate mock prices for each symbol
-    const symbolsWithPrices = symbols.map((s) => ({
-      ...s,
-      lastPrice: this.getBasePriceForSymbol(s.symbol)
-    }));
+    // Fetch latest market data for each symbol
+    const symbolsWithPrices = await Promise.all(
+      symbols.map(async (s) => {
+        const latestData = await prisma.marketData.findFirst({
+          where: { symbol: s.symbol },
+          orderBy: { timestamp: 'desc' }
+        });
+
+        return {
+          ...s,
+          lastPrice: latestData ? Number(latestData.close) : 0
+        };
+      })
+    );
 
     return symbolsWithPrices;
   }
@@ -79,12 +89,28 @@ export class MarketService {
       take: limit
     });
 
-    // Generate mock prices for each symbol
-    const symbolsWithPrices = symbols.map((s) => ({
-      ...s,
-      lastPrice: this.getBasePriceForSymbol(s.symbol),
-      currentPrice: this.getBasePriceForSymbol(s.symbol)
-    }));
+    // Fetch latest market data for each symbol
+    const symbolsWithPrices = await Promise.all(
+      symbols.map(async (s) => {
+        const latestData = await prisma.marketData.findFirst({
+          where: { symbol: s.symbol },
+          orderBy: { timestamp: 'desc' }
+        });
+
+        const lastPrice = latestData ? Number(latestData.close) : 0;
+        const ldcp = latestData ? Number(latestData.ldcp || latestData.close) : 0;
+        const change = lastPrice - ldcp;
+        const changePercent = ldcp > 0 ? (change / ldcp) * 100 : 0;
+
+        return {
+          ...s,
+          lastPrice,
+          currentPrice: lastPrice,
+          change: parseFloat(change.toFixed(2)),
+          changePercent: parseFloat(changePercent.toFixed(2))
+        };
+      })
+    );
 
     return {
       data: symbolsWithPrices,
@@ -109,9 +135,12 @@ export class MarketService {
       }
     });
 
-    return symbols.map(s => s.symbol);
+    return symbols.map((s) => s.symbol);
   }
 
+  // DEPRECATED: Mock data generators - no longer used
+  // Kept for reference only - all prices now fetched from database
+  /*
   private static getBasePriceForSymbol(symbol: string): number {
     // Check cache first
     if (this.BASE_PRICE_CACHE[symbol]) {
@@ -119,9 +148,6 @@ export class MarketService {
     }
 
     // Generate base price based on symbol characteristics
-    // Common stocks: 50-500 range
-    // Large cap: Higher prices (PSO, OGDC, etc.)
-    // Small cap: Lower prices
     const basePrices: Record<string, number> = {
       PSO: 250.5,
       OGDC: 150.75,
@@ -140,7 +166,6 @@ export class MarketService {
       KSE100: 45000.0
     };
 
-    // Use predefined price if available, otherwise generate based on symbol hash
     const basePrice = basePrices[symbol] || this.generateBasePriceFromSymbol(symbol);
     this.BASE_PRICE_CACHE[symbol] = basePrice;
 
@@ -148,22 +173,22 @@ export class MarketService {
   }
 
   private static generateBasePriceFromSymbol(symbol: string): number {
-    // Generate a consistent price based on symbol characters
     let hash = 0;
     for (let i = 0; i < symbol.length; i++) {
       hash = symbol.charCodeAt(i) + ((hash << 5) - hash);
     }
-
-    // Generate price between 10 and 500
     const price = 10 + (Math.abs(hash) % 490);
     return Math.round(price * 100) / 100;
   }
+  */
 
   static async getCurrentPrice(symbol: string): Promise<number> {
+    const symbolUpper = symbol.toUpperCase();
+
     // Check cache first (if Redis is available)
     if (isRedisAvailable()) {
       try {
-        const cached = await redis.get(this.CACHE_PREFIX + symbol);
+        const cached = await redis.get(this.CACHE_PREFIX + symbolUpper);
         if (cached) {
           return parseFloat(cached);
         }
@@ -172,24 +197,31 @@ export class MarketService {
       }
     }
 
-    // Verify symbol exists in database
-    const symbolData = await prisma.symbol.findUnique({
-      where: { symbol: symbol.toUpperCase() }
+    // Get latest market data from database
+    const latestData = await prisma.marketData.findFirst({
+      where: { symbol: symbolUpper },
+      orderBy: { timestamp: 'desc' }
     });
 
-    if (!symbolData) {
-      throw new AppError(`Symbol ${symbol} not found`, 404);
+    if (!latestData) {
+      // Verify symbol exists
+      const symbolExists = await prisma.symbol.findUnique({
+        where: { symbol: symbolUpper }
+      });
+
+      if (!symbolExists) {
+        throw new AppError(`Symbol ${symbol} not found`, 404);
+      }
+
+      throw new AppError(`No market data available for ${symbol}`, 404);
     }
 
-    // Get base price and add random variation (-2% to +2%)
-    const basePrice = this.getBasePriceForSymbol(symbol);
-    const variation = (Math.random() - 0.5) * 0.04;
-    const price = basePrice * (1 + variation);
+    const price = Number(latestData.close);
 
     // Cache it (if Redis is available)
     if (isRedisAvailable()) {
       try {
-        await redis.setex(this.CACHE_PREFIX + symbol, this.CACHE_TTL, price.toString());
+        await redis.setex(this.CACHE_PREFIX + symbolUpper, this.CACHE_TTL, price.toString());
       } catch (err) {
         // Redis error, continue without caching
       }
@@ -265,10 +297,10 @@ export class MarketService {
     }
   }
 
+  // DEPRECATED: Mock price generator - no longer used
+  /*
   static generateMockPrice(symbol: string): StockPrice {
     const basePrice = this.getBasePriceForSymbol(symbol);
-
-    // Random variation (-3% to +3%)
     const variation = (Math.random() - 0.5) * 0.06;
     const price = basePrice * (1 + variation);
     const change = price - basePrice;
@@ -282,5 +314,111 @@ export class MarketService {
       volume: Math.floor(Math.random() * 1000000) + 10000,
       timestamp: new Date()
     };
+  }
+  */
+
+  /**
+   * Get symbol details from database and latest market data
+   */
+  /**
+   * Get symbol timeseries data from PSX API
+   */
+  static async getSymbolTimeseries(symbol: string, type: 'int' | 'eod' = 'int') {
+    try {
+      const url = `https://dps.psx.com.pk/timeseries/${type}/${symbol.toUpperCase()}`;
+
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        },
+        timeout: 10000
+      });
+
+      // PSX API returns data in format: { data: [[timestamp, price, volume, ...], ...] }
+      // We need to transform it to a more usable format
+      if (response.data && response.data.data) {
+        return response.data.data.map((item: any[]) => ({
+          time: item[0],
+          value: item[1],
+          volume: item[2]
+        }));
+      }
+
+      return [];
+    } catch (error: any) {
+      console.error(`Failed to fetch timeseries for ${symbol}:`, error.message);
+      return []; // Return empty array on failure to avoid breaking the UI
+    }
+  }
+
+  static async getSymbolDetailsFromPSX(symbol: string) {
+    try {
+      const symbolUpper = symbol.toUpperCase();
+
+      // Get symbol information from database
+      const symbolData = await prisma.symbol.findUnique({
+        where: { symbol: symbolUpper }
+      });
+
+      if (!symbolData) {
+        throw new AppError(`Symbol ${symbol} not found`, 404);
+      }
+
+      // Get latest market data for this symbol
+      const latestMarketData = await prisma.marketData.findFirst({
+        where: { symbol: symbolUpper },
+        orderBy: { timestamp: 'desc' }
+      });
+
+      // Fetch timeseries data for chart (intraday)
+      const chartData = await this.getSymbolTimeseries(symbolUpper, 'int');
+
+      // Calculate price and change
+      const lastPrice = latestMarketData ? Number(latestMarketData.close) : 0;
+      const open = latestMarketData ? Number(latestMarketData.open) : lastPrice;
+      const high = latestMarketData ? Number(latestMarketData.high) : lastPrice;
+      const low = latestMarketData ? Number(latestMarketData.low) : lastPrice;
+      const volume = latestMarketData ? Number(latestMarketData.volume) : 0;
+      const ldcp = latestMarketData
+        ? Number(latestMarketData.ldcp || latestMarketData.close)
+        : lastPrice;
+
+      const change = lastPrice - ldcp;
+      const changePercent = ldcp > 0 ? (change / ldcp) * 100 : 0;
+
+      return {
+        symbol: symbolUpper,
+        name: symbolData.name || symbolUpper,
+        price: {
+          last: parseFloat(lastPrice.toFixed(2)),
+          change: parseFloat(change.toFixed(2)),
+          changePercent: parseFloat(changePercent.toFixed(2))
+        },
+        stats: {
+          open: parseFloat(open.toFixed(2)),
+          high: parseFloat(high.toFixed(2)),
+          low: parseFloat(low.toFixed(2)),
+          volume: volume,
+          ldcp: parseFloat(ldcp.toFixed(2))
+        },
+        chartData, // Include chart data in response
+        profile: {
+          sector: symbolData.sectorName || '',
+          about: `${symbolData.name} is listed on the Pakistan Stock Exchange under the ${symbolData.sectorName || 'N/A'} sector.`,
+          contact: {
+            address: '',
+            phone: '',
+            email: '',
+            website: ''
+          }
+        },
+        timestamp: latestMarketData?.timestamp || new Date()
+      };
+    } catch (error: any) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throw new AppError(`Failed to fetch symbol details: ${error.message}`, 500);
+    }
   }
 }

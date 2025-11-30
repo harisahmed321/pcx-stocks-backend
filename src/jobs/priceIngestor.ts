@@ -1,4 +1,3 @@
-import { MarketService } from '../modules/market/market.service.js';
 import { MarketGateway } from '../sockets/marketGateway.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config/index.js';
@@ -42,6 +41,9 @@ export class PriceIngestor {
   }
 
   private async ingestMockPrices() {
+    // DEPRECATED: This job is disabled and uses mock data
+    // Use MarketDataFetcherJob instead for real PSX data
+    /*
     const symbols = await MarketService.getAvailableSymbols();
 
     for (const symbolData of symbols) {
@@ -67,6 +69,7 @@ export class PriceIngestor {
     }
 
     logger.debug(`Ingested prices for ${symbols.length} symbols`);
+    */
+    logger.warn('PriceIngestor is disabled - use MarketDataFetcherJob instead');
   }
 }
-

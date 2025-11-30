@@ -47,6 +47,10 @@ export class MarketSimulatorJob {
   }
 
   private async generateAndBroadcastUpdates() {
+    // DEPRECATED: This job is disabled and uses mock data
+    // Use MarketDataFetcherJob instead for real PSX data
+    logger.warn('MarketSimulatorJob is disabled - use MarketDataFetcherJob instead');
+    /*
     try {
       // Generate updates for a random subset of symbols (to simulate real market behavior)
       // In a real scenario, you'd update all symbols, but for performance we'll update 20-50 at a time
@@ -79,6 +83,7 @@ export class MarketSimulatorJob {
     } catch (error) {
       logger.error('Error generating market updates', error);
     }
+    */
   }
 
   private getRandomSymbols(count: number): string[] {
@@ -88,13 +93,13 @@ export class MarketSimulatorJob {
 
   private applyTrendAdjustment(symbol: string, basePrice: number): number {
     const history = this.priceHistory.get(symbol) || [];
-    
+
     if (history.length === 0) {
       return basePrice;
     }
 
     const lastPrice = history[history.length - 1];
-    
+
     // Calculate trend from recent history
     let trend = 0;
     if (history.length >= 3) {

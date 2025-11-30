@@ -11,6 +11,14 @@ export class MarketController {
     ];
     static async getSymbols(req, res, next) {
         try {
+            const page = req.query.page ? parseInt(req.query.page) : undefined;
+            const limit = req.query.limit ? parseInt(req.query.limit) : undefined;
+            // If pagination parameters are provided, use paginated response
+            if (page && limit) {
+                const result = await MarketService.getSymbolsPaginated(page, limit);
+                return ResponseHelper.success(res, result.data, undefined, 200, result.pagination);
+            }
+            // Otherwise, return all symbols (backward compatibility)
             const symbols = await MarketService.getAvailableSymbols();
             return ResponseHelper.success(res, symbols);
         }
@@ -42,6 +50,19 @@ export class MarketController {
             const interval = req.query.interval || 'daily';
             const history = await MarketService.getHistoricalData(req.params.symbol.toUpperCase(), from, to, interval);
             return ResponseHelper.success(res, { symbol: req.params.symbol.toUpperCase(), interval, data: history });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async getSymbolDetails(req, res, next) {
+        try {
+            const errors = validationResult(req);
+            if (!errors.isEmpty()) {
+                return ResponseHelper.badRequest(res, errors.array(), 'Validation failed');
+            }
+            const details = await MarketService.getSymbolDetailsFromPSX(req.params.symbol.toUpperCase());
+            return ResponseHelper.success(res, details);
         }
         catch (error) {
             next(error);

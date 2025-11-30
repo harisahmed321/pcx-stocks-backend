@@ -4,9 +4,16 @@ export interface ApiResponse<T = any> {
     data?: T;
     errors?: any;
     message?: string;
+    pagination?: {
+        page: number;
+        limit: number;
+        total: number;
+        totalPages: number;
+        hasMore: boolean;
+    };
 }
 export declare class ResponseHelper {
-    static success<T>(res: Response, data: T, message?: string, statusCode?: number): Response<any, Record<string, any>>;
+    static success<T>(res: Response, data: T, message?: string, statusCode?: number, pagination?: any): Response<any, Record<string, any>>;
     static error(res: Response, errors: any, message?: string, statusCode?: number): Response<any, Record<string, any>>;
     static created<T>(res: Response, data: T, message?: string): Response<any, Record<string, any>>;
     static noContent(res: Response): Response<any, Record<string, any>>;

@@ -24,5 +24,12 @@ router.get('/:symbol/price', MarketController.symbolValidation, MarketController
  */
 router.get('/:symbol/history', MarketController.historyValidation, MarketController.getHistory);
 
+/**
+ * @route   GET /api/v1/market/:symbol/details
+ * @desc    Get detailed information for symbol from PSX
+ * @access  Public
+ */
+router.get('/:symbol/details', MarketController.symbolValidation, MarketController.getSymbolDetails);
+
 export default router;
 

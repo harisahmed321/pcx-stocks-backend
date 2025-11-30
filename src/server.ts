@@ -1,10 +1,8 @@
 import { createServer } from 'http';
 import { createApp } from './app.js';
 import { MarketGateway } from './sockets/marketGateway.js';
-import { PriceIngestor } from './jobs/priceIngestor.js';
 import { SymbolsSyncJob } from './jobs/symbolsSyncJob.js';
 import { MarketDataFetcherJob } from './jobs/marketDataFetcherJob.js';
-import { MarketSimulatorJob } from './jobs/market-simulator.job.js';
 import { logger } from './utils/logger.js';
 import { prisma } from './prisma/client.js';
 import { redis, initializeRedis, isRedisAvailable } from './utils/redis.js';
@@ -22,8 +20,9 @@ export async function startServer() {
   logger.info('Socket.IO initialized');
 
   // Start price ingestor job
-  const priceIngestor = new PriceIngestor(marketGateway);
-  priceIngestor.start();
+  // DISABLED: This job generates mock prices that override real database prices
+  // const priceIngestor = new PriceIngestor(marketGateway);
+  // priceIngestor.start();
 
   // Start symbols sync job (fetches PSX symbols daily at 7:30 AM)
   const symbolsSyncJob = new SymbolsSyncJob();
@@ -36,9 +35,10 @@ export async function startServer() {
   logger.info('Market data fetcher job started');
 
   // Start market simulator job (generates real-time price updates)
-  const marketSimulatorJob = new MarketSimulatorJob(marketGateway, 3000); // Update every 3 seconds
-  await marketSimulatorJob.start();
-  logger.info('Market simulator job started');
+  // DISABLED: This job generates mock prices that override real database prices
+  // const marketSimulatorJob = new MarketSimulatorJob(marketGateway, 3000); // Update every 3 seconds
+  // await marketSimulatorJob.start();
+  // logger.info('Market simulator job started');
 
   // Inject job instance into admin controller
   setMarketDataFetcherJob(marketDataFetcherJob);
@@ -47,10 +47,10 @@ export async function startServer() {
   const shutdown = async () => {
     logger.info('Shutting down gracefully...');
 
-    priceIngestor.stop();
+    // priceIngestor.stop(); // Disabled
     symbolsSyncJob.stop();
     marketDataFetcherJob.stop();
-    marketSimulatorJob.stop();
+    // marketSimulatorJob.stop(); // Disabled
 
     httpServer.close(() => {
       logger.info('HTTP server closed');
@@ -72,5 +72,5 @@ export async function startServer() {
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
 
-  return { httpServer, marketGateway, priceIngestor, symbolsSyncJob, marketDataFetcherJob, marketSimulatorJob };
+  return { httpServer, marketGateway, symbolsSyncJob, marketDataFetcherJob };
 }

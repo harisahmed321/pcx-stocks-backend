@@ -1,4 +1,3 @@
-import { MarketService } from '../modules/market/market.service.js';
 import { logger } from '../utils/logger.js';
 import { config } from '../config/index.js';
 export class PriceIngestor {
@@ -36,22 +35,36 @@ export class PriceIngestor {
         }
     }
     async ingestMockPrices() {
+        // DEPRECATED: This job is disabled and uses mock data
+        // Use MarketDataFetcherJob instead for real PSX data
+        /*
         const symbols = await MarketService.getAvailableSymbols();
+    
         for (const symbolData of symbols) {
-            const priceData = MarketService.generateMockPrice(symbolData.symbol);
-            // Broadcast the update via Socket.IO
-            this.marketGateway.broadcastPriceUpdate(priceData.symbol, priceData.price, priceData.change, priceData.changePercent);
-            // Optionally, store to database (for historical data)
-            // await MarketService.ingestMarketData(priceData.symbol, {
-            //   timestamp: priceData.timestamp,
-            //   open: priceData.price,
-            //   high: priceData.price,
-            //   low: priceData.price,
-            //   close: priceData.price,
-            //   volume: priceData.volume,
-            // });
+          const priceData = MarketService.generateMockPrice(symbolData.symbol);
+    
+          // Broadcast the update via Socket.IO
+          this.marketGateway.broadcastPriceUpdate(
+            priceData.symbol,
+            priceData.price,
+            priceData.change,
+            priceData.changePercent
+          );
+    
+          // Optionally, store to database (for historical data)
+          // await MarketService.ingestMarketData(priceData.symbol, {
+          //   timestamp: priceData.timestamp,
+          //   open: priceData.price,
+          //   high: priceData.price,
+          //   low: priceData.price,
+          //   close: priceData.price,
+          //   volume: priceData.volume,
+          // });
         }
+    
         logger.debug(`Ingested prices for ${symbols.length} symbols`);
+        */
+        logger.warn('PriceIngestor is disabled - use MarketDataFetcherJob instead');
     }
 }
 //# sourceMappingURL=priceIngestor.js.map

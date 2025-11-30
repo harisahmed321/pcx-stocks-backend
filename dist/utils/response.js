@@ -1,9 +1,10 @@
 export class ResponseHelper {
-    static success(res, data, message, statusCode = 200) {
+    static success(res, data, message, statusCode = 200, pagination) {
         const response = {
             success: true,
             data,
-            message
+            message,
+            ...(pagination && { pagination })
         };
         return res.status(statusCode).json(response);
     }

@@ -34,5 +34,9 @@ export declare class AdminController {
      * Get symbols list for admin
      */
     static getSymbols(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    /**
+     * Get latest market data for all symbols (one record per symbol)
+     */
+    static getLatestMarketData(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
 }
 //# sourceMappingURL=admin.controller.d.ts.map

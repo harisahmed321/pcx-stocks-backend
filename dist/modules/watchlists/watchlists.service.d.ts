@@ -20,32 +20,42 @@ export declare class WatchlistsService {
         createdAt: Date;
         userId: string;
     }>;
-    static getUserWatchlists(userId: string): Promise<({
-        _count: {
-            items: number;
-        };
+    static getUserWatchlists(userId: string): Promise<{
         items: {
+            marketData: {
+                price: number;
+                change: number;
+                changePercent: number;
+                volume: number;
+            } | null;
             symbol: string;
             id: string;
             createdAt: Date;
             notes: string | null;
             watchlistId: string;
         }[];
-    } & {
+        _count: {
+            items: number;
+        };
         name: string;
         id: string;
         createdAt: Date;
         userId: string;
-    })[]>;
+    }[]>;
     static getWatchlistById(userId: string, watchlistId: string): Promise<{
         items: {
+            marketData: {
+                price: number;
+                change: number;
+                changePercent: number;
+                volume: number;
+            } | null;
             symbol: string;
             id: string;
             createdAt: Date;
             notes: string | null;
             watchlistId: string;
         }[];
-    } & {
         name: string;
         id: string;
         createdAt: Date;

@@ -50,7 +50,38 @@ export class SymbolsService {
       }
     });
 
-    return symbols;
+    // Fetch latest market data for each symbol
+    const symbolsWithMarketData = await Promise.all(
+      symbols.map(async (symbol) => {
+        const marketData = await prisma.marketData.findFirst({
+          where: { symbol: symbol.symbol },
+          orderBy: { timestamp: 'desc' },
+          select: {
+            close: true,
+            ldcp: true,
+            open: true
+          }
+        });
+
+        if (marketData) {
+          const price = Number(marketData.close);
+          const previousPrice = Number(marketData.ldcp || marketData.open);
+          const change = price - previousPrice;
+          const changePercent = previousPrice ? (change / previousPrice) * 100 : 0;
+
+          return {
+            ...symbol,
+            price,
+            change,
+            changePercent
+          };
+        }
+
+        return symbol;
+      })
+    );
+
+    return symbolsWithMarketData;
   }
 
   static async getSymbolByCode(symbol: string) {

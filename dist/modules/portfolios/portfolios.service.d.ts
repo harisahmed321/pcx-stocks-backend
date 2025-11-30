@@ -72,8 +72,8 @@ export declare class PortfoliosService {
         transactions: {
             symbol: string;
             id: string;
-            quantity: import("@prisma/client/runtime/library.js").Decimal;
             type: import(".prisma/client").$Enums.TransactionType;
+            quantity: import("@prisma/client/runtime/library.js").Decimal;
             price: import("@prisma/client/runtime/library.js").Decimal;
             fees: import("@prisma/client/runtime/library.js").Decimal;
             date: Date;

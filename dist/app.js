@@ -17,6 +17,7 @@ import alertsRoutes from './modules/alerts/alerts.routes.js';
 import marketRoutes from './modules/market/market.routes.js';
 import symbolsRoutes from './modules/symbols/symbols.routes.js';
 import adminRoutes from './modules/admin/admin.routes.js';
+import taxRoutes from './modules/tax/tax.routes.js';
 export function createApp() {
     const app = express();
     // Security middleware
@@ -45,8 +46,8 @@ export function createApp() {
     }
     // Rate limiting
     const limiter = rateLimit({
-        windowMs: config.rateLimit.windowMs,
-        max: config.rateLimit.maxRequests,
+        windowMs: 60 * 1000, // 1 minute
+        max: 1000, // Increased limit for testing
         message: 'Too many requests from this IP, please try again later'
     });
     app.use('/api/', limiter);
@@ -70,6 +71,7 @@ export function createApp() {
     apiRouter.use('/market', marketRoutes);
     apiRouter.use('/symbols', symbolsRoutes);
     apiRouter.use('/admin', adminRoutes);
+    apiRouter.use('/tax', taxRoutes);
     app.use(`/api/${config.apiVersion}`, apiRouter);
     // 404 handler
     app.use(notFoundHandler);
