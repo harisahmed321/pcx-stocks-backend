@@ -6,6 +6,12 @@ export interface CreateAlertDto {
   symbol: string;
   alertType: AlertType;
   condition: string;
+  triggerType?: 'ONE_TIME' | 'RECURRING';
+}
+
+export interface UpdateAlertDto {
+  condition?: string;
+  triggerType?: 'ONE_TIME' | 'RECURRING';
 }
 
 export class AlertsService {
@@ -16,7 +22,9 @@ export class AlertsService {
         symbol: data.symbol.toUpperCase(),
         alertType: data.alertType,
         condition: data.condition,
-      },
+        triggerType: data.triggerType || 'ONE_TIME',
+        isActive: true
+      }
     });
 
     return alert;
@@ -31,7 +39,7 @@ export class AlertsService {
 
     const alerts = await prisma.alert.findMany({
       where,
-      orderBy: [{ triggered: 'asc' }, { createdAt: 'desc' }],
+      orderBy: [{ triggered: 'asc' }, { createdAt: 'desc' }]
     });
 
     return alerts;
@@ -41,8 +49,16 @@ export class AlertsService {
     const alert = await prisma.alert.findFirst({
       where: {
         id: alertId,
-        userId,
+        userId
       },
+      include: {
+        history: {
+          orderBy: {
+            triggeredAt: 'desc'
+          },
+          take: 10 // Last 10 triggers
+        }
+      }
     });
 
     if (!alert) {
@@ -54,7 +70,7 @@ export class AlertsService {
 
   static async deleteAlert(userId: string, alertId: string) {
     const alert = await prisma.alert.findFirst({
-      where: { id: alertId, userId },
+      where: { id: alertId, userId }
     });
 
     if (!alert) {
@@ -62,10 +78,68 @@ export class AlertsService {
     }
 
     await prisma.alert.delete({
-      where: { id: alertId },
+      where: { id: alertId }
     });
 
     return { message: 'Alert deleted successfully' };
+  }
+
+  static async updateAlert(userId: string, alertId: string, data: UpdateAlertDto) {
+    const alert = await prisma.alert.findFirst({
+      where: { id: alertId, userId }
+    });
+
+    if (!alert) {
+      throw new AppError('Alert not found', 404);
+    }
+
+    const updated = await prisma.alert.update({
+      where: { id: alertId },
+      data: {
+        ...(data.condition && { condition: data.condition }),
+        ...(data.triggerType && { triggerType: data.triggerType }),
+        updatedAt: new Date()
+      }
+    });
+
+    return updated;
+  }
+
+  static async toggleAlertActive(userId: string, alertId: string) {
+    const alert = await prisma.alert.findFirst({
+      where: { id: alertId, userId }
+    });
+
+    if (!alert) {
+      throw new AppError('Alert not found', 404);
+    }
+
+    const updated = await prisma.alert.update({
+      where: { id: alertId },
+      data: {
+        isActive: !alert.isActive,
+        updatedAt: new Date()
+      }
+    });
+
+    return updated;
+  }
+
+  static async getAlertHistory(userId: string, alertId: string) {
+    const alert = await prisma.alert.findFirst({
+      where: { id: alertId, userId }
+    });
+
+    if (!alert) {
+      throw new AppError('Alert not found', 404);
+    }
+
+    const history = await prisma.alertHistory.findMany({
+      where: { alertId },
+      orderBy: { triggeredAt: 'desc' }
+    });
+
+    return history;
   }
 
   static async triggerAlert(alertId: string) {
@@ -73,8 +147,8 @@ export class AlertsService {
       where: { id: alertId },
       data: {
         triggered: true,
-        triggeredAt: new Date(),
-      },
+        triggeredAt: new Date()
+      }
     });
 
     return alert;
@@ -86,16 +160,16 @@ export class AlertsService {
       where: {
         symbol: symbol.toUpperCase(),
         triggered: false,
-        alertType: 'PRICE',
+        alertType: 'PRICE'
       },
       include: {
         user: {
           select: {
             id: true,
-            email: true,
-          },
-        },
-      },
+            email: true
+          }
+        }
+      }
     });
 
     const triggeredAlerts = [];
@@ -110,7 +184,7 @@ export class AlertsService {
           userId: alert.user.id,
           symbol: alert.symbol,
           condition: alert.condition,
-          currentPrice,
+          currentPrice
         });
       }
     }
@@ -144,4 +218,3 @@ export class AlertsService {
     }
   }
 }
-

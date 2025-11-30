@@ -215,19 +215,45 @@ model WatchlistItem {
 }
 
 model Alert {
-  id          String    @id @default(uuid())
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String
-  symbol      String
-  alertType   AlertType
-  condition   String // e.g. "> 100" or "percent_change < -5"
-  triggered   Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  triggeredAt DateTime?
+  id              String         @id @default(uuid())
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId          String
+  symbol          String
+  alertType       AlertType
+  condition       String // e.g. "> 100" or "percent_change < -5"
+  triggered       Boolean        @default(false)
+  isActive        Boolean        @default(true) // Can be toggled on/off
+  triggerType     TriggerType    @default(ONE_TIME) // ONE_TIME or RECURRING
+  triggerCount    Int            @default(0) // Number of times triggered
+  lastTriggeredAt DateTime? // Last time this alert was triggered
+  triggeredPrice  Decimal?       @db.Decimal(24, 8) // Price when last triggered
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  triggeredAt     DateTime? // For backwards compatibility
+  history         AlertHistory[] // Trigger history
 
   @@index([userId])
   @@index([symbol])
   @@index([triggered])
+  @@index([isActive])
+}
+
+model AlertHistory {
+  id          String   @id @default(uuid())
+  alert       Alert    @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  alertId     String
+  triggeredAt DateTime @default(now())
+  price       Decimal  @db.Decimal(24, 8) // Price at trigger time
+  condition   String // Condition that was met
+  createdAt   DateTime @default(now())
+
+  @@index([alertId])
+  @@index([triggeredAt])
+}
+
+enum TriggerType {
+  ONE_TIME
+  RECURRING
 }
 
 enum AlertType {
