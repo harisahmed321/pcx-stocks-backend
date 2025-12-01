@@ -364,6 +364,34 @@ async function main() {
     }
   });
 
+  // Admin User (index 4) - 5 portfolios (Premium plan limit)
+  const adminPortfolio1 = await prisma.portfolio.create({
+    data: {
+      userId: users[4].id,
+      name: 'Admin Test Portfolio',
+      description: 'Primary admin testing portfolio',
+      cashBalance: 1000000
+    }
+  });
+
+  const adminPortfolio2 = await prisma.portfolio.create({
+    data: {
+      userId: users[4].id,
+      name: 'Banking Sector',
+      description: 'Banking stocks portfolio',
+      cashBalance: 500000
+    }
+  });
+
+  const adminPortfolio3 = await prisma.portfolio.create({
+    data: {
+      userId: users[4].id,
+      name: 'Energy & Utilities',
+      description: 'Oil, gas, and power sector',
+      cashBalance: 750000
+    }
+  });
+
   // Create Holdings for different users
   // First, fetch latest market data for realistic avg buy prices
   const getLatestPrice = async (symbol: string): Promise<number> => {
@@ -553,6 +581,79 @@ async function main() {
         avgBuyPrice: (await getLatestPrice('TRG')) * 0.92 // 8% below current price
       }
     }),
+    // Admin User Holdings
+    prisma.holding.create({
+      data: {
+        portfolioId: adminPortfolio1.id,
+        symbol: 'HBL',
+        name: 'Habib Bank Limited',
+        quantity: 150,
+        avgBuyPrice: (await getLatestPrice('HBL')) * 0.93 // 7% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: adminPortfolio1.id,
+        symbol: 'LUCK',
+        name: 'Lucky Cement',
+        quantity: 100,
+        avgBuyPrice: (await getLatestPrice('LUCK')) * 0.88 // 12% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: adminPortfolio1.id,
+        symbol: 'SYS',
+        name: 'Systems Limited',
+        quantity: 80,
+        avgBuyPrice: (await getLatestPrice('SYS')) * 0.9 // 10% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: adminPortfolio2.id,
+        symbol: 'UBL',
+        name: 'United Bank Limited',
+        quantity: 200,
+        avgBuyPrice: (await getLatestPrice('UBL')) * 0.92 // 8% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: adminPortfolio2.id,
+        symbol: 'MCB',
+        name: 'Muslim Commercial Bank',
+        quantity: 150,
+        avgBuyPrice: (await getLatestPrice('MCB')) * 0.95 // 5% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: adminPortfolio3.id,
+        symbol: 'PSO',
+        name: 'Pakistan State Oil',
+        quantity: 120,
+        avgBuyPrice: (await getLatestPrice('PSO')) * 0.9 // 10% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: adminPortfolio3.id,
+        symbol: 'OGDC',
+        name: 'Oil & Gas Development Company',
+        quantity: 250,
+        avgBuyPrice: (await getLatestPrice('OGDC')) * 0.94 // 6% below current price
+      }
+    }),
+    prisma.holding.create({
+      data: {
+        portfolioId: adminPortfolio3.id,
+        symbol: 'PPL',
+        name: 'Pakistan Petroleum Limited',
+        quantity: 180,
+        avgBuyPrice: (await getLatestPrice('PPL')) * 0.91 // 9% below current price
+      }
+    }),
     // Additional Lite User holding
     prisma.holding.create({
       data: {
@@ -688,6 +789,28 @@ async function main() {
     }
   });
 
+  // Admin User Watchlists
+  const watchlist9 = await prisma.watchlist.create({
+    data: {
+      userId: users[4].id, // Admin User
+      name: 'Admin Watchlist - Blue Chips'
+    }
+  });
+
+  const watchlist10 = await prisma.watchlist.create({
+    data: {
+      userId: users[4].id, // Admin User
+      name: 'Admin Watchlist - Tech Sector'
+    }
+  });
+
+  const watchlist11 = await prisma.watchlist.create({
+    data: {
+      userId: users[4].id, // Admin User
+      name: 'Admin Watchlist - Energy'
+    }
+  });
+
   // Create Watchlist Items
   await Promise.all([
     // Pro User Watchlists
@@ -790,6 +913,63 @@ async function main() {
         watchlistId: watchlist8.id,
         symbol: 'DGKC',
         notes: 'Cement sector'
+      }
+    }),
+    // Admin User Watchlist Items
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist9.id,
+        symbol: 'HBL',
+        notes: 'Blue chip - banking sector leader'
+      }
+    }),
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist9.id,
+        symbol: 'ENGRO',
+        notes: 'Blue chip - diversified conglomerate'
+      }
+    }),
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist9.id,
+        symbol: 'LUCK',
+        notes: 'Blue chip - cement sector'
+      }
+    }),
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist10.id,
+        symbol: 'SYS',
+        notes: 'Systems Limited - IT services'
+      }
+    }),
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist10.id,
+        symbol: 'TRG',
+        notes: 'TRG Pakistan - BPO sector'
+      }
+    }),
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist11.id,
+        symbol: 'PSO',
+        notes: 'Pakistan State Oil'
+      }
+    }),
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist11.id,
+        symbol: 'OGDC',
+        notes: 'Oil & Gas Development'
+      }
+    }),
+    prisma.watchlistItem.create({
+      data: {
+        watchlistId: watchlist11.id,
+        symbol: 'PPL',
+        notes: 'Pakistan Petroleum Limited'
       }
     })
   ]);

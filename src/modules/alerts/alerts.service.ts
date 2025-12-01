@@ -142,24 +142,48 @@ export class AlertsService {
     return history;
   }
 
-  static async triggerAlert(alertId: string) {
-    const alert = await prisma.alert.update({
+  static async triggerAlert(alertId: string, currentPrice?: number) {
+    const alert = await prisma.alert.findUnique({
+      where: { id: alertId }
+    });
+
+    if (!alert) {
+      throw new AppError('Alert not found', 404);
+    }
+
+    // Update alert with trigger information
+    const updated = await prisma.alert.update({
       where: { id: alertId },
       data: {
         triggered: true,
-        triggeredAt: new Date()
+        triggeredAt: new Date(),
+        lastTriggeredAt: new Date(),
+        triggeredPrice: currentPrice || alert.triggeredPrice,
+        triggerCount: { increment: 1 }
       }
     });
 
-    return alert;
+    // If recurring, reset the triggered status after a short delay
+    if (alert.triggerType === 'RECURRING') {
+      // Reset immediately for recurring alerts so they can trigger again
+      await prisma.alert.update({
+        where: { id: alertId },
+        data: {
+          triggered: false
+        }
+      });
+    }
+
+    return updated;
   }
 
   static async checkAlerts(symbol: string, currentPrice: number) {
-    // Get all non-triggered price alerts for this symbol
+    // Get all active, non-triggered price alerts for this symbol
     const alerts = await prisma.alert.findMany({
       where: {
         symbol: symbol.toUpperCase(),
         triggered: false,
+        isActive: true,
         alertType: 'PRICE'
       },
       include: {
@@ -178,13 +202,14 @@ export class AlertsService {
       const shouldTrigger = this.evaluateCondition(alert.condition, currentPrice);
 
       if (shouldTrigger) {
-        await this.triggerAlert(alert.id);
+        await this.triggerAlert(alert.id, currentPrice);
         triggeredAlerts.push({
           alertId: alert.id,
           userId: alert.user.id,
           symbol: alert.symbol,
           condition: alert.condition,
-          currentPrice
+          currentPrice,
+          triggerType: alert.triggerType
         });
       }
     }

@@ -3,12 +3,18 @@ import { ResponseHelper } from '../../utils/response.js';
 import { logger } from '../../utils/logger.js';
 import { prisma } from '../../prisma/client.js';
 import { MarketDataFetcherJob } from '../../jobs/marketDataFetcherJob.js';
+import { SymbolsSyncJob } from '../../jobs/symbolsSyncJob.js';
 
 // This will be injected from server.ts
 let marketDataFetcherJobInstance: MarketDataFetcherJob | null = null;
+let symbolsSyncJobInstance: SymbolsSyncJob | null = null;
 
 export function setMarketDataFetcherJob(job: MarketDataFetcherJob) {
   marketDataFetcherJobInstance = job;
+}
+
+export function setSymbolsSyncJob(job: SymbolsSyncJob) {
+  symbolsSyncJobInstance = job;
 }
 
 /**
@@ -187,9 +193,12 @@ export class AdminController {
    */
   static async setScheduledTime(req: Request, res: Response) {
     try {
-      const { time } = req.body; // 24-hour format, e.g., "14:30" or null to disable
+      const { time, days } = req.body;
 
-      if (time && !/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
+      // Validate time format (HH:MM in 24-hour format)
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+
+      if (time && !timeRegex.test(time)) {
         return ResponseHelper.badRequest(
           res,
           null,
@@ -197,13 +206,43 @@ export class AdminController {
         );
       }
 
-      if (!marketDataFetcherJobInstance) {
-        return ResponseHelper.error(res, null, 'Market data fetcher job not initialized', 500);
+      // Validate days array
+      const validDays = [
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+        'sunday'
+      ];
+      if (
+        days &&
+        (!Array.isArray(days) ||
+          !days.every((day: string) => validDays.includes(day.toLowerCase())))
+      ) {
+        return ResponseHelper.badRequest(
+          res,
+          null,
+          'Invalid days. Must be an array of valid day names'
+        );
       }
 
-      marketDataFetcherJobInstance.setScheduledTime(time || null);
+      if (!symbolsSyncJobInstance) {
+        return ResponseHelper.error(res, null, 'Symbols sync job not initialized', 500);
+      }
 
-      return ResponseHelper.success(res, { time }, 'Scheduled time updated successfully');
+      // Update the schedule configuration for symbols sync job
+      symbolsSyncJobInstance.setScheduleConfig({
+        time: time || null,
+        days: days || []
+      });
+
+      return ResponseHelper.success(
+        res,
+        { time, days },
+        'Symbol sync schedule updated successfully'
+      );
     } catch (error) {
       logger.error('Error setting scheduled time:', error);
       return ResponseHelper.error(res, null, 'Failed to set scheduled time', 500);
@@ -271,7 +310,8 @@ export class AdminController {
           symbol: true,
           name: true,
           sectorName: true,
-          url: true
+          url: true,
+          updatedAt: true
         }
       });
 
@@ -279,6 +319,25 @@ export class AdminController {
     } catch (error) {
       logger.error('Error getting symbols:', error);
       return ResponseHelper.error(res, null, 'Failed to get symbols', 500);
+    }
+  }
+
+  /**
+   * Trigger manual symbols sync
+   */
+  static async triggerSymbolsSync(req: Request, res: Response) {
+    try {
+      if (!symbolsSyncJobInstance) {
+        return ResponseHelper.error(res, null, 'Symbols sync job not initialized', 500);
+      }
+
+      // Trigger the sync manually
+      symbolsSyncJobInstance.syncSymbols();
+
+      return ResponseHelper.success(res, null, 'Symbols sync triggered successfully');
+    } catch (error) {
+      logger.error('Error triggering symbols sync:', error);
+      return ResponseHelper.error(res, null, 'Failed to trigger symbols sync', 500);
     }
   }
 
@@ -304,17 +363,11 @@ export class AdminController {
       });
 
       const results = await Promise.all(latestDataPromises);
-      
-      // Filter out nulls and serialize
-      const latestData = results
-        .filter((data) => data !== null)
-        .map(serializeMarketData);
 
-      return ResponseHelper.success(
-        res,
-        latestData,
-        'Latest market data retrieved successfully'
-      );
+      // Filter out nulls and serialize
+      const latestData = results.filter((data) => data !== null).map(serializeMarketData);
+
+      return ResponseHelper.success(res, latestData, 'Latest market data retrieved successfully');
     } catch (error) {
       logger.error('Error getting latest market data:', error);
       return ResponseHelper.error(res, null, 'Failed to get latest market data', 500);

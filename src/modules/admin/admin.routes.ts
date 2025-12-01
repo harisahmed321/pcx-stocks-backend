@@ -34,6 +34,13 @@ router.get('/market-data', AdminController.getAllMarketData);
 router.get('/symbols', AdminController.getSymbols);
 
 /**
+ * @route   POST /api/v1/admin/symbols/sync
+ * @desc    Manually trigger symbols sync from PSX
+ * @access  Private (Admin)
+ */
+router.post('/symbols/sync', AdminController.triggerSymbolsSync);
+
+/**
  * @route   GET /api/v1/admin/symbols/:symbol/market-data
  * @desc    Get market data for a specific symbol
  * @access  Private (Admin)

@@ -1,6 +1,8 @@
 import { logger } from '../utils/logger.js';
 import { prisma } from '../prisma/client.js';
 import { MarketDataParserService } from '../services/marketDataParser.service.js';
+import { AlertsService } from '../modules/alerts/alerts.service.js';
+import { MarketGateway } from '../sockets/marketGateway.js';
 import pLimit from 'p-limit';
 
 export class MarketDataFetcherJob {
@@ -8,9 +10,18 @@ export class MarketDataFetcherJob {
   private isRunning = false;
   private fetchInterval: number = 60000; // Default 60 seconds
   private scheduledTime: string | null = null; // For admin scheduling
+  private marketGateway?: MarketGateway;
   private concurrencyLimit: number = 20; // Parallel fetch limit
   private startTime: string | null = null; // Start time in HH:mm format (24-hour)
   private endTime: string | null = null; // End time in HH:mm format (24-hour)
+
+  /**
+   * Set the market gateway for broadcasting price updates and triggering alerts
+   */
+  setMarketGateway(marketGateway: MarketGateway): void {
+    this.marketGateway = marketGateway;
+    logger.info('Market gateway set for alert triggering');
+  }
 
   /**
    * Set custom fetch interval (in seconds)
@@ -230,6 +241,14 @@ export class MarketDataFetcherJob {
             data: dataToSave
           });
           logger.info(`✅ Market data updated for ${symbol} (existing record)`);
+
+          // Check alerts and broadcast price update after data change
+          await this.checkAlertsAndBroadcast(
+            symbol,
+            parsedData.askPrice || parsedData.close || 0,
+            parsedData.change || 0,
+            parsedData.changePercent || 0
+          );
         } else {
           logger.debug(`No changes detected for ${symbol}, skipping update`);
         }
@@ -239,6 +258,14 @@ export class MarketDataFetcherJob {
           data: dataToSave
         });
         logger.info(`✅ Market data saved for ${symbol} (new record)`);
+
+        // Check alerts and broadcast price update for new data
+        await this.checkAlertsAndBroadcast(
+          symbol,
+          parsedData.askPrice || parsedData.close || 0,
+          parsedData.change || 0,
+          parsedData.changePercent || 0
+        );
       }
 
       return true;
@@ -457,6 +484,64 @@ export class MarketDataFetcherJob {
   setConcurrencyLimit(limit: number): void {
     this.concurrencyLimit = Math.max(1, Math.min(100, limit)); // Clamp between 1 and 100
     logger.info(`Market data fetch concurrency limit set to ${this.concurrencyLimit}`);
+  }
+
+  /**
+   * Check alerts and broadcast price update when market data changes
+   */
+  private async checkAlertsAndBroadcast(
+    symbol: string,
+    price: number,
+    change: number,
+    changePercent: number
+  ): Promise<void> {
+    try {
+      // Check if any alerts should be triggered
+      const triggeredAlerts = await AlertsService.checkAlerts(symbol, price);
+
+      // Log triggered alerts
+      if (triggeredAlerts.length > 0) {
+        logger.info(
+          `🔔 ${triggeredAlerts.length} alert(s) triggered for ${symbol} at price ${price}`
+        );
+
+        // Broadcast to users via WebSocket if marketGateway is available
+        if (this.marketGateway) {
+          for (const alert of triggeredAlerts) {
+            this.marketGateway
+              .getIO()
+              .of('/market')
+              .to(`user:${alert.userId}`)
+              .emit('alert:trigger', {
+                ...alert,
+                message: `Alert triggered for ${symbol}: Price ${price >= alert.currentPrice ? 'reached' : 'dropped to'} ${price}`
+              });
+          }
+        }
+
+        // Create notifications for triggered alerts
+        for (const alert of triggeredAlerts) {
+          await prisma.notification.create({
+            data: {
+              userId: alert.userId,
+              type: 'ALERT_TRIGGERED',
+              title: `Alert Triggered: ${symbol}`,
+              message: `Your alert for ${symbol} has been triggered. Current price: ₨${price.toFixed(2)}`,
+              relatedId: alert.alertId,
+              relatedType: 'ALERT',
+              isRead: false
+            }
+          });
+        }
+      }
+
+      // Broadcast price update via WebSocket/Redis if marketGateway is available
+      if (this.marketGateway && price > 0) {
+        this.marketGateway.broadcastPriceUpdate(symbol, price, change, changePercent);
+      }
+    } catch (error) {
+      logger.error(`Error checking alerts for ${symbol}:`, error);
+    }
   }
 
   /**

@@ -12,6 +12,13 @@ interface PSXSymbol {
 export class SymbolsSyncJob {
   private isRunning = false;
   private intervalId?: NodeJS.Timeout;
+  private scheduleConfig: {
+    time: string | null;
+    days: string[];
+  } = {
+    time: '09:00',
+    days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+  };
 
   async syncSymbols(): Promise<void> {
     if (this.isRunning) {
@@ -39,13 +46,27 @@ export class SymbolsSyncJob {
         return;
       }
 
-      // First, delete all existing symbols (empty the table)
-      logger.info('Clearing existing symbols from database...');
-      const deleteResult = await prisma.symbol.deleteMany({});
-      logger.info(`Deleted ${deleteResult.count} existing symbols`);
+      // Get existing symbols from database
+      const existingSymbols = await prisma.symbol.findMany({
+        select: { symbol: true }
+      });
+      const existingSymbolSet = new Set(existingSymbols.map((s) => s.symbol));
+      logger.info(`Found ${existingSymbols.length} existing symbols in database`);
 
-      // Prepare symbols data with URLs
-      const symbolsToInsert = symbols.map((symbolData) => ({
+      // Filter only missing symbols
+      const missingSymbols = symbols.filter(
+        (symbolData) => !existingSymbolSet.has(symbolData.symbol)
+      );
+
+      if (missingSymbols.length === 0) {
+        logger.info('All symbols are already in database. No new symbols to add.');
+        return;
+      }
+
+      logger.info(`Found ${missingSymbols.length} missing symbols to add`);
+
+      // Prepare missing symbols data with URLs
+      const symbolsToInsert = missingSymbols.map((symbolData) => ({
         symbol: symbolData.symbol,
         name: symbolData.name,
         sectorName: symbolData.sectorName || null,
@@ -54,28 +75,27 @@ export class SymbolsSyncJob {
         url: `https://dps.psx.com.pk/company/${symbolData.symbol}`
       }));
 
-      // Insert all symbols in batch using createMany for better performance
-      logger.info(`Inserting ${symbolsToInsert.length} new symbols...`);
-
+      // Insert missing symbols in batch
       try {
-        // Use createMany for efficient batch insert (since table is empty, no duplicates)
-        const batchSize = 1000; // Prisma recommends batches of 1000 or less
+        const batchSize = 1000;
         let insertedCount = 0;
 
         for (let i = 0; i < symbolsToInsert.length; i += batchSize) {
           const batch = symbolsToInsert.slice(i, i + batchSize);
           const result = await prisma.symbol.createMany({
             data: batch,
-            skipDuplicates: true // Safety check, though table should be empty
+            skipDuplicates: true
           });
           insertedCount += result.count;
           logger.debug(`Inserted batch ${Math.floor(i / batchSize) + 1}: ${result.count} symbols`);
         }
 
-        logger.info(`Symbols sync completed: ${insertedCount} symbols inserted`);
+        logger.info(
+          `Symbols sync completed: ${insertedCount} new symbols added. Last updated: ${new Date().toISOString()}`
+        );
       } catch (error: any) {
         logger.error('Error inserting symbols:', error.message);
-        throw error; // Re-throw to be caught by outer try-catch
+        throw error;
       }
     } catch (error: any) {
       logger.error('Error syncing PSX symbols:', error);
@@ -85,26 +105,96 @@ export class SymbolsSyncJob {
   }
 
   start(): void {
-    logger.info('Starting symbols sync job scheduler');
+    logger.info('Starting symbols sync job (one-time execution)');
 
-    // Run immediately on startup
+    // Run once on startup
     this.syncSymbols();
+  }
 
-    // Schedule to run daily at 7:30 AM
+  /**
+   * Set schedule configuration for symbol sync
+   */
+  setScheduleConfig(config: { time: string | null; days: string[] }): void {
+    this.scheduleConfig = {
+      time: config.time || '09:00',
+      days:
+        config.days.length > 0
+          ? config.days
+          : ['monday', 'tuesday', 'wednesday', 'thursday', 'friday']
+    };
+
+    logger.info(`Symbol sync schedule updated:`, this.scheduleConfig);
+
+    // Restart scheduler with new config
+    this.stop();
     this.scheduleDaily();
+  }
+
+  /**
+   * Get current schedule configuration
+   */
+  getScheduleConfig(): { time: string | null; days: string[] } {
+    return { ...this.scheduleConfig };
+  }
+
+  /**
+   * Check if current day is a scheduled day
+   */
+  private isScheduledDay(): boolean {
+    const now = new Date();
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const currentDay = dayNames[now.getDay()];
+
+    // Check if today is a scheduled day
+    return this.scheduleConfig.days.includes(currentDay);
   }
 
   private scheduleDaily(): void {
     const schedule = () => {
       const now = new Date();
+
+      // Check if we're on a scheduled day
+      if (!this.isScheduledDay()) {
+        logger.info('Current day is not a scheduled day');
+        // Schedule next check in 1 hour
+        this.intervalId = setTimeout(
+          () => {
+            schedule();
+          },
+          60 * 60 * 1000
+        ); // Check every hour
+        return;
+      }
+
       const targetTime = new Date();
 
-      // Set target time to 7:30 AM
-      targetTime.setHours(7, 30, 0, 0);
+      // Use configured time (default 9:00 AM)
+      const [hour, minute] = (this.scheduleConfig.time || '09:00').split(':').map(Number);
+      targetTime.setHours(hour, minute, 0, 0);
 
-      // If we've passed 7:30 AM today, schedule for tomorrow
+      // If we've passed the scheduled time today, schedule for next valid day
       if (now > targetTime) {
         targetTime.setDate(targetTime.getDate() + 1);
+
+        // Find next valid day
+        const dayNames = [
+          'sunday',
+          'monday',
+          'tuesday',
+          'wednesday',
+          'thursday',
+          'friday',
+          'saturday'
+        ];
+        let daysChecked = 0;
+        while (daysChecked < 7) {
+          const dayName = dayNames[targetTime.getDay()];
+          if (this.scheduleConfig.days.includes(dayName)) {
+            break;
+          }
+          targetTime.setDate(targetTime.getDate() + 1);
+          daysChecked++;
+        }
       }
 
       const timeUntilRun = targetTime.getTime() - now.getTime();
@@ -113,7 +203,7 @@ export class SymbolsSyncJob {
 
       this.intervalId = setTimeout(() => {
         this.syncSymbols();
-        schedule(); // Reschedule for next day
+        schedule(); // Reschedule for next run
       }, timeUntilRun);
     };
 
