@@ -1,17 +1,30 @@
 import { prisma } from '../../prisma/client.js';
 import { AppError } from '../../utils/errorHandler.js';
-import { AlertType } from '@prisma/client';
+import { AlertType, SignalType, LogicMode } from '@prisma/client';
+import { alertEvaluationService } from '../../services/alertEvaluation.service.js';
+import { IndicatorConfig } from '../../services/technicalIndicators.service.js';
 
 export interface CreateAlertDto {
   symbol: string;
   alertType: AlertType;
   condition: string;
   triggerType?: 'ONE_TIME' | 'RECURRING';
+  // Advanced alert fields
+  name?: string;
+  signalType?: SignalType;
+  logicMode?: LogicMode;
+  indicatorConfig?: IndicatorConfig;
+  timeframe?: string;
 }
 
 export interface UpdateAlertDto {
   condition?: string;
   triggerType?: 'ONE_TIME' | 'RECURRING';
+  name?: string;
+  signalType?: SignalType;
+  logicMode?: LogicMode;
+  indicatorConfig?: IndicatorConfig;
+  timeframe?: string;
 }
 
 export class AlertsService {
@@ -23,7 +36,12 @@ export class AlertsService {
         alertType: data.alertType,
         condition: data.condition,
         triggerType: data.triggerType || 'ONE_TIME',
-        isActive: true
+        isActive: true,
+        name: data.name,
+        signalType: data.signalType || SignalType.NEUTRAL,
+        logicMode: data.logicMode || LogicMode.ANY,
+        indicatorConfig: data.indicatorConfig || undefined,
+        timeframe: data.timeframe || 'daily'
       }
     });
 
@@ -98,6 +116,11 @@ export class AlertsService {
       data: {
         ...(data.condition && { condition: data.condition }),
         ...(data.triggerType && { triggerType: data.triggerType }),
+        ...(data.name && { name: data.name }),
+        ...(data.signalType && { signalType: data.signalType }),
+        ...(data.logicMode && { logicMode: data.logicMode }),
+        ...(data.indicatorConfig && { indicatorConfig: data.indicatorConfig }),
+        ...(data.timeframe && { timeframe: data.timeframe }),
         updatedAt: new Date()
       }
     });
@@ -178,13 +201,12 @@ export class AlertsService {
   }
 
   static async checkAlerts(symbol: string, currentPrice: number) {
-    // Get all active, non-triggered price alerts for this symbol
+    // Get all active, non-triggered alerts for this symbol
     const alerts = await prisma.alert.findMany({
       where: {
         symbol: symbol.toUpperCase(),
         triggered: false,
-        isActive: true,
-        alertType: 'PRICE'
+        isActive: true
       },
       include: {
         user: {
@@ -199,17 +221,56 @@ export class AlertsService {
     const triggeredAlerts = [];
 
     for (const alert of alerts) {
-      const shouldTrigger = this.evaluateCondition(alert.condition, currentPrice);
+      let shouldTrigger = false;
+      let signalType: SignalType | null = null;
+      let message = '';
+
+      // Check if alert has indicator configuration (advanced alert)
+      if (alert.indicatorConfig && alert.alertType === AlertType.TECHNICAL) {
+        // Prepare indicators for evaluation
+        const { currentIndicators, prevIndicators } =
+          await alertEvaluationService.prepareIndicatorsForAlert(alert, currentPrice);
+
+        // Evaluate advanced alert
+        const result = await alertEvaluationService.checkAlert(
+          alert,
+          currentPrice,
+          currentIndicators,
+          prevIndicators
+        );
+
+        shouldTrigger = result.triggered;
+        signalType = result.signalType;
+        message = result.message || '';
+      } else {
+        // Legacy simple price alert
+        shouldTrigger = this.evaluateCondition(alert.condition, currentPrice);
+        signalType = alert.signalType;
+      }
 
       if (shouldTrigger) {
         await this.triggerAlert(alert.id, currentPrice);
+
+        // Create alert history entry
+        await prisma.alertHistory.create({
+          data: {
+            alertId: alert.id,
+            price: currentPrice,
+            condition: message || alert.condition,
+            triggeredAt: new Date()
+          }
+        });
+
         triggeredAlerts.push({
           alertId: alert.id,
           userId: alert.user.id,
           symbol: alert.symbol,
           condition: alert.condition,
           currentPrice,
-          triggerType: alert.triggerType
+          triggerType: alert.triggerType,
+          signalType,
+          message,
+          name: alert.name
         });
       }
     }

@@ -227,6 +227,12 @@ model Alert {
   triggerCount    Int            @default(0) // Number of times triggered
   lastTriggeredAt DateTime? // Last time this alert was triggered
   triggeredPrice  Decimal?       @db.Decimal(24, 8) // Price when last triggered
+  // Advanced Alert Fields
+  name            String? // Custom alert name (e.g., "Buy Signal", "Sell Alert")
+  signalType      SignalType?    @default(NEUTRAL) // BUY, SELL, NEUTRAL
+  logicMode       LogicMode?     @default(ANY) // ALL (AND) or ANY (OR)
+  indicatorConfig Json? // JSON configuration for technical indicators
+  timeframe       String?        @default("daily") // daily, hourly, etc.
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
   triggeredAt     DateTime? // For backwards compatibility
@@ -236,6 +242,7 @@ model Alert {
   @@index([symbol])
   @@index([triggered])
   @@index([isActive])
+  @@index([signalType])
 }
 
 model AlertHistory {
@@ -261,6 +268,18 @@ enum AlertType {
   PERCENT
   CORPORATE_EVENT
   CUSTOM
+  TECHNICAL // New type for indicator-based alerts
+}
+
+enum SignalType {
+  BUY
+  SELL
+  NEUTRAL
+}
+
+enum LogicMode {
+  ALL // AND - all conditions must be met
+  ANY // OR - any condition can trigger
 }
 
 model MarketData {

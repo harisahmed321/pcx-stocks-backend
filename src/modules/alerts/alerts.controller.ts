@@ -7,7 +7,7 @@ export class AlertsController {
   static createValidation = [
     body('symbol').trim().notEmpty().withMessage('Symbol is required'),
     body('alertType')
-      .isIn(['PRICE', 'PERCENT', 'CORPORATE_EVENT', 'CUSTOM'])
+      .isIn(['PRICE', 'PERCENT', 'CORPORATE_EVENT', 'CUSTOM', 'TECHNICAL'])
       .withMessage('Invalid alert type'),
     body('condition').trim().notEmpty().withMessage('Condition is required'),
     body('triggerType')
