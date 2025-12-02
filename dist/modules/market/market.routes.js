@@ -25,5 +25,11 @@ router.get('/:symbol/history', MarketController.historyValidation, MarketControl
  * @access  Public
  */
 router.get('/:symbol/details', MarketController.symbolValidation, MarketController.getSymbolDetails);
+/**
+ * @route   GET /api/v1/market/:symbol/timeseries
+ * @desc    Get 5 years timeseries data from PSX (for backtesting)
+ * @access  Public
+ */
+router.get('/:symbol/timeseries', MarketController.symbolValidation, MarketController.getTimeseries);
 export default router;
 //# sourceMappingURL=market.routes.js.map

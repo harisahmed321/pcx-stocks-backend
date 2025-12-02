@@ -1,11 +1,17 @@
+import { MarketGateway } from '../sockets/marketGateway.js';
 export declare class MarketDataFetcherJob {
     private intervalId?;
     private isRunning;
     private fetchInterval;
     private scheduledTime;
+    private marketGateway?;
     private concurrencyLimit;
     private startTime;
     private endTime;
+    /**
+     * Set the market gateway for broadcasting price updates and triggering alerts
+     */
+    setMarketGateway(marketGateway: MarketGateway): void;
     /**
      * Set custom fetch interval (in seconds)
      */
@@ -50,6 +56,10 @@ export declare class MarketDataFetcherJob {
      * Set concurrency limit for parallel fetching
      */
     setConcurrencyLimit(limit: number): void;
+    /**
+     * Check alerts and broadcast price update when market data changes
+     */
+    private checkAlertsAndBroadcast;
     /**
      * Get current status
      */

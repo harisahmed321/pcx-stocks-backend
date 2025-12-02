@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { MarketDataFetcherJob } from '../../jobs/marketDataFetcherJob.js';
+import { SymbolsSyncJob } from '../../jobs/symbolsSyncJob.js';
 export declare function setMarketDataFetcherJob(job: MarketDataFetcherJob): void;
+export declare function setSymbolsSyncJob(job: SymbolsSyncJob): void;
 export declare class AdminController {
     /**
      * Get market data for a symbol
@@ -34,6 +36,10 @@ export declare class AdminController {
      * Get symbols list for admin
      */
     static getSymbols(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
+    /**
+     * Trigger manual symbols sync
+     */
+    static triggerSymbolsSync(req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
     /**
      * Get latest market data for all symbols (one record per symbol)
      */

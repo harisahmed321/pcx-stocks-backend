@@ -84,5 +84,16 @@ export declare class MarketService {
         };
         timestamp: Date;
     }>;
+    /**
+     * Fetch 5 years timeseries data from PSX API for backtesting
+     * Response format: [[timestamp, price, volume], ...]
+     */
+    static getTimeseriesFromPSX(symbol: string): Promise<{
+        symbol: string;
+        dataPoints: any;
+        startDate: any;
+        endDate: any;
+        data: any;
+    }>;
 }
 //# sourceMappingURL=market.service.d.ts.map

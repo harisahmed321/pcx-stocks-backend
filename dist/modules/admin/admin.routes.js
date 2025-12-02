@@ -4,7 +4,14 @@ import { RolePermissionsController } from './role-permissions.controller.js';
 import { PlansController } from './plans.controller.js';
 import { authenticate, requireRole } from '../auth/auth.middleware.js';
 const router = Router();
-// All admin routes require authentication and admin role
+// Public authenticated routes (no admin role required)
+/**
+ * @route   GET /api/v1/admin/market-data/latest
+ * @desc    Get latest market data for all symbols (one record per symbol)
+ * @access  Private (All authenticated users)
+ */
+router.get('/market-data/latest', authenticate, AdminController.getLatestMarketData);
+// All remaining admin routes require authentication and admin role
 router.use(authenticate);
 router.use(requireRole('ADMIN'));
 /**
@@ -20,6 +27,12 @@ router.get('/market-data', AdminController.getAllMarketData);
  * @access  Private (Admin)
  */
 router.get('/symbols', AdminController.getSymbols);
+/**
+ * @route   POST /api/v1/admin/symbols/sync
+ * @desc    Manually trigger symbols sync from PSX
+ * @access  Private (Admin)
+ */
+router.post('/symbols/sync', AdminController.triggerSymbolsSync);
 /**
  * @route   GET /api/v1/admin/symbols/:symbol/market-data
  * @desc    Get market data for a specific symbol
@@ -59,12 +72,6 @@ router.put('/fetcher/time-window', AdminController.setTimeWindow);
  * @access  Private (Admin)
  */
 router.put('/fetcher/schedule', AdminController.setScheduledTime);
-/**
- * @route   GET /api/v1/admin/market-data/latest
- * @desc    Get latest market data for all symbols (one record per symbol)
- * @access  Private (Admin)
- */
-router.get('/market-data/latest', AdminController.getLatestMarketData);
 /**
  * @route   GET /api/v1/admin/role-permissions
  * @desc    Get all role permissions

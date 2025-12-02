@@ -10,14 +10,24 @@ export declare class SymbolsService {
         isDebt: boolean;
         url: string;
     }[]>;
-    static searchSymbols(query: string, limit?: number): Promise<{
+    static searchSymbols(query: string, limit?: number): Promise<({
         symbol: string;
         name: string;
         id: string;
         sectorName: string | null;
         isETF: boolean;
         url: string;
-    }[]>;
+    } | {
+        price: number;
+        change: number;
+        changePercent: number;
+        symbol: string;
+        name: string;
+        id: string;
+        sectorName: string | null;
+        isETF: boolean;
+        url: string;
+    })[]>;
     static getSymbolByCode(symbol: string): Promise<{
         symbol: string;
         name: string;

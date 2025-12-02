@@ -41,6 +41,7 @@ export interface Trade {
   pnlPct: number;
   pnlAmount?: number;
   signalType: 'buy' | 'sell';
+  exitSignalType?: 'buy' | 'sell' | 'stop-loss' | 'take-profit';
   shares: number;
 }
 
@@ -442,6 +443,8 @@ export class BacktestService {
               lastTrade.exitPrice = exitPrice;
               lastTrade.pnlPct = tradePnlPct * 100;
               lastTrade.pnlAmount = tradePnlAmount - fees;
+              lastTrade.exitSignalType =
+                pnlPct <= -config.stopLossPct ? 'stop-loss' : 'take-profit';
             }
 
             position = { open: false, entryPrice: 0, entryDate: '', shares: 0, signalType: null };
@@ -544,23 +547,70 @@ export class BacktestService {
           }
         }
 
-        // Log first few evaluations to help debug
-        if (i <= 100 && i % 20 === 0) {
-          console.log(`Candle ${i} (${currentDate}):`, {
+        // Log signal triggers for debugging
+        if ((buySignalTriggered || sellSignalTriggered) && positionOpenedCount < 10) {
+          console.log(`📊 Signal Triggered at Candle ${i} (${currentDate}):`, {
             price: currentCandle.close.toFixed(2),
             rsi: currentIndicators.rsi?.toFixed(2),
-            volume: currentCandle.volume,
-            avgVolume: (currentIndicators.avgVolume || 0).toFixed(0),
-            bollinger: currentIndicators.bollinger
-              ? {
-                  upper: currentIndicators.bollinger.upper?.toFixed(2),
-                  middle: currentIndicators.bollinger.middle?.toFixed(2),
-                  lower: currentIndicators.bollinger.lower?.toFixed(2)
-                }
-              : 'N/A',
-            buySignal: buySignalTriggered,
-            sellSignal: sellSignalTriggered
+            buySignalTriggered,
+            sellSignalTriggered,
+            isDualMode: isDualSignalMode,
+            isBuyOnly,
+            isSellOnly,
+            positionOpen: position.open,
+            positionType: position.signalType
           });
+        }
+
+        // In dual signal mode, close position if opposite signal triggers
+        if (isDualSignalMode && position.open) {
+          const shouldClosePosition =
+            (position.signalType === 'long' && sellSignalTriggered) ||
+            (position.signalType === 'short' && buySignalTriggered);
+
+          if (shouldClosePosition) {
+            // Close position
+            const exitPrice = currentCandle.close;
+            const exitValue = position.shares * exitPrice;
+            const fees = exitValue * (config.feesPct / 2);
+            const capitalBefore = capital;
+            capital += exitValue - fees;
+
+            const pnlPct =
+              ((exitPrice - position.entryPrice) / position.entryPrice) *
+              (position.signalType === 'long' ? 1 : -1);
+            const pnlAmount = position.shares * exitPrice - position.shares * position.entryPrice;
+
+            // Update last trade with exit info
+            if (trades.length > 0) {
+              const lastTrade = trades[trades.length - 1];
+              lastTrade.exitDate = currentDate;
+              lastTrade.exitPrice = exitPrice;
+              lastTrade.pnlPct = pnlPct * 100;
+              lastTrade.pnlAmount = pnlAmount - fees;
+              lastTrade.exitSignalType = sellSignalTriggered ? 'sell' : 'buy';
+            }
+
+            if (positionOpenedCount <= 5) {
+              console.log(`\n💰 Position closed by opposite signal:`, {
+                tradeNum: positionOpenedCount,
+                entryType: position.signalType,
+                exitType: sellSignalTriggered ? 'SELL' : 'BUY',
+                entryPrice: position.entryPrice.toFixed(2),
+                exitPrice: exitPrice.toFixed(2),
+                shares: position.shares.toFixed(2),
+                exitValue: exitValue.toFixed(2),
+                exitFees: fees.toFixed(2),
+                pnlPct: (pnlPct * 100).toFixed(2) + '%',
+                pnlAmount: pnlAmount.toFixed(2),
+                capitalBefore: capitalBefore.toFixed(2),
+                capitalAfter: capital.toFixed(2),
+                capitalChange: (capital - capitalBefore).toFixed(2)
+              });
+            }
+
+            position = { open: false, entryPrice: 0, entryDate: '', shares: 0, signalType: null };
+          }
         }
 
         // Enter new position if triggered and no position open
@@ -569,10 +619,14 @@ export class BacktestService {
 
           const entryPrice = currentCandle.close;
           const investment = capital * config.positionSize;
-          const shares = investment / entryPrice;
-          const fees = investment * (config.feesPct / 2);
+          const entryFees = investment * (config.feesPct / 2);
 
-          capital -= fees;
+          // Calculate shares from net investment (after entry fees)
+          const netInvestment = investment - entryFees;
+          const shares = netInvestment / entryPrice;
+
+          const capitalBefore = capital;
+          capital -= investment; // Deduct only the investment amount
 
           const signalType = buySignalTriggered ? 'long' : 'short';
 
@@ -587,12 +641,18 @@ export class BacktestService {
           positionOpenedCount++;
 
           if (positionOpenedCount <= 5) {
-            console.log(`Trade ${positionOpenedCount} opened:`, {
+            console.log(`\n🔵 Trade ${positionOpenedCount} OPENED:`, {
               date: currentDate,
               type: signalType,
-              price: entryPrice,
+              signal: buySignalTriggered ? 'BUY' : 'SELL',
+              price: entryPrice.toFixed(2),
+              capitalBefore: capitalBefore.toFixed(2),
+              investment: investment.toFixed(2),
+              entryFees: entryFees.toFixed(2),
+              netInvestment: netInvestment.toFixed(2),
               shares: shares.toFixed(2),
-              signal: buySignalTriggered ? 'BUY' : 'SELL'
+              capitalAfter: capital.toFixed(2),
+              capitalDeducted: (capitalBefore - capital).toFixed(2)
             });
           }
 
@@ -601,6 +661,7 @@ export class BacktestService {
             entryPrice,
             pnlPct: 0,
             signalType: buySignalTriggered ? 'buy' : 'sell',
+            exitSignalType: undefined,
             shares
           });
 
@@ -616,7 +677,8 @@ export class BacktestService {
         if (position.open) {
           const currentPrice = currentCandle.close;
           const positionValue = position.shares * currentPrice;
-          currentValue = capital + positionValue - position.shares * position.entryPrice;
+          // Capital already has investment deducted, so just add current position value
+          currentValue = capital + positionValue;
         }
 
         equityCurve.push({
@@ -661,6 +723,7 @@ export class BacktestService {
           lastTrade.exitPrice = exitPrice;
           lastTrade.pnlPct = pnlPct * 100;
           lastTrade.pnlAmount = pnlAmount - fees;
+          lastTrade.exitSignalType = 'take-profit'; // End of backtest period
         }
 
         equityCurve[equityCurve.length - 1].value = capital;
@@ -668,6 +731,21 @@ export class BacktestService {
 
       // Calculate stats
       const stats = this.calculateBacktestStats(trades, equityCurve, config.initialCapital);
+
+      console.log('\n📊 BACKTEST SUMMARY:');
+      console.log({
+        initialCapital: config.initialCapital.toFixed(2),
+        finalCapital: capital.toFixed(2),
+        totalProfit: (capital - config.initialCapital).toFixed(2),
+        profitPct: stats.profit + '%',
+        totalTrades: trades.length,
+        completedTrades: trades.filter((t) => t.exitDate).length,
+        winningTrades: stats.winningTrades,
+        losingTrades: trades.filter((t) => t.exitDate && t.pnlPct <= 0).length,
+        winRate: stats.winRate + '%',
+        buyTrades: stats.buyTrades,
+        sellTrades: stats.sellTrades
+      });
 
       // Generate optimization suggestions
       const optimizationSuggestions = this.generateOptimizationSuggestions(config, stats);

@@ -6,5 +6,6 @@ export declare class MarketController {
     static getCurrentPrice(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>> | undefined>;
     static getHistory(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>> | undefined>;
     static getSymbolDetails(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>> | undefined>;
+    static getTimeseries(req: Request, res: Response, next: NextFunction): Promise<Response<any, Record<string, any>> | undefined>;
 }
 //# sourceMappingURL=market.controller.d.ts.map

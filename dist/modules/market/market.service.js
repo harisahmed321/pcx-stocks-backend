@@ -356,5 +356,46 @@ export class MarketService {
             throw new AppError(`Failed to fetch symbol details: ${error.message}`, 500);
         }
     }
+    /**
+     * Fetch 5 years timeseries data from PSX API for backtesting
+     * Response format: [[timestamp, price, volume], ...]
+     */
+    static async getTimeseriesFromPSX(symbol) {
+        try {
+            const url = `https://dps.psx.com.pk/timeseries/int/${symbol}`;
+            const response = await axios.get(url, {
+                timeout: 30000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            });
+            if (response.data.status === 1 && response.data.data) {
+                // Parse the data: [[timestamp, price, volume], ...]
+                const rawData = response.data.data;
+                // Transform to more usable format with Date objects
+                const timeseries = rawData.map((item) => ({
+                    timestamp: new Date(item[0] * 1000), // Convert Unix timestamp to Date
+                    price: item[1],
+                    volume: item[2]
+                }));
+                // Sort by timestamp ascending (oldest first)
+                timeseries.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+                return {
+                    symbol,
+                    dataPoints: timeseries.length,
+                    startDate: timeseries[0]?.timestamp,
+                    endDate: timeseries[timeseries.length - 1]?.timestamp,
+                    data: timeseries
+                };
+            }
+            throw new AppError('No timeseries data available from PSX', 404);
+        }
+        catch (error) {
+            if (error instanceof AppError) {
+                throw error;
+            }
+            throw new AppError(`Failed to fetch timeseries data: ${error.message}`, 500);
+        }
+    }
 }
 //# sourceMappingURL=market.service.js.map

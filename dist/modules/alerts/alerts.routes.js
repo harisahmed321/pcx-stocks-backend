@@ -18,10 +18,28 @@ router.get('/', AlertsController.getAll);
 router.post('/', AlertsController.createValidation, AlertsController.create);
 /**
  * @route   GET /api/v1/alerts/:id
- * @desc    Get alert by ID
+ * @desc    Get alert by ID with history
  * @access  Private
  */
 router.get('/:id', AlertsController.idValidation, AlertsController.getById);
+/**
+ * @route   PATCH /api/v1/alerts/:id
+ * @desc    Update alert
+ * @access  Private
+ */
+router.patch('/:id', AlertsController.updateValidation, AlertsController.update);
+/**
+ * @route   PATCH /api/v1/alerts/:id/toggle
+ * @desc    Toggle alert active/inactive status
+ * @access  Private
+ */
+router.patch('/:id/toggle', AlertsController.idValidation, AlertsController.toggleActive);
+/**
+ * @route   GET /api/v1/alerts/:id/history
+ * @desc    Get alert trigger history
+ * @access  Private
+ */
+router.get('/:id/history', AlertsController.idValidation, AlertsController.getHistory);
 /**
  * @route   DELETE /api/v1/alerts/:id
  * @desc    Delete alert

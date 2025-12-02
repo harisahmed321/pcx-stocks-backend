@@ -15,6 +15,13 @@ export interface CreateAlertDto {
   logicMode?: LogicMode;
   indicatorConfig?: IndicatorConfig;
   timeframe?: string;
+  // Dual signal support
+  enableBuySignal?: boolean;
+  enableSellSignal?: boolean;
+  buyIndicatorConfig?: IndicatorConfig;
+  sellIndicatorConfig?: IndicatorConfig;
+  buyLogicMode?: LogicMode;
+  sellLogicMode?: LogicMode;
 }
 
 export interface UpdateAlertDto {
@@ -25,6 +32,13 @@ export interface UpdateAlertDto {
   logicMode?: LogicMode;
   indicatorConfig?: IndicatorConfig;
   timeframe?: string;
+  // Dual signal support
+  enableBuySignal?: boolean;
+  enableSellSignal?: boolean;
+  buyIndicatorConfig?: IndicatorConfig;
+  sellIndicatorConfig?: IndicatorConfig;
+  buyLogicMode?: LogicMode;
+  sellLogicMode?: LogicMode;
 }
 
 export class AlertsService {
@@ -40,8 +54,15 @@ export class AlertsService {
         name: data.name,
         signalType: data.signalType || SignalType.NEUTRAL,
         logicMode: data.logicMode || LogicMode.ANY,
-        indicatorConfig: data.indicatorConfig || undefined,
-        timeframe: data.timeframe || 'daily'
+        indicatorConfig: (data.indicatorConfig || undefined) as any,
+        timeframe: data.timeframe || 'daily',
+        // Dual signal support
+        enableBuySignal: data.enableBuySignal,
+        enableSellSignal: data.enableSellSignal,
+        buyIndicatorConfig: (data.buyIndicatorConfig || undefined) as any,
+        sellIndicatorConfig: (data.sellIndicatorConfig || undefined) as any,
+        buyLogicMode: data.buyLogicMode,
+        sellLogicMode: data.sellLogicMode
       }
     });
 
@@ -119,8 +140,19 @@ export class AlertsService {
         ...(data.name && { name: data.name }),
         ...(data.signalType && { signalType: data.signalType }),
         ...(data.logicMode && { logicMode: data.logicMode }),
-        ...(data.indicatorConfig && { indicatorConfig: data.indicatorConfig }),
+        ...(data.indicatorConfig !== undefined && { indicatorConfig: data.indicatorConfig as any }),
         ...(data.timeframe && { timeframe: data.timeframe }),
+        // Dual signal support
+        ...(data.enableBuySignal !== undefined && { enableBuySignal: data.enableBuySignal }),
+        ...(data.enableSellSignal !== undefined && { enableSellSignal: data.enableSellSignal }),
+        ...(data.buyIndicatorConfig !== undefined && {
+          buyIndicatorConfig: data.buyIndicatorConfig as any
+        }),
+        ...(data.sellIndicatorConfig !== undefined && {
+          sellIndicatorConfig: data.sellIndicatorConfig as any
+        }),
+        ...(data.buyLogicMode && { buyLogicMode: data.buyLogicMode }),
+        ...(data.sellLogicMode && { sellLogicMode: data.sellLogicMode }),
         updatedAt: new Date()
       }
     });
