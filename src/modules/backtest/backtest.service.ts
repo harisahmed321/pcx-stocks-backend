@@ -23,6 +23,13 @@ export interface BacktestConfig {
     signalType: SignalType;
     logicMode: 'ALL' | 'ANY';
     indicatorConfig?: IndicatorConfig;
+    // Dual signal support
+    enableBuySignal?: boolean;
+    enableSellSignal?: boolean;
+    buyIndicatorConfig?: IndicatorConfig;
+    sellIndicatorConfig?: IndicatorConfig;
+    buyLogicMode?: 'ALL' | 'ANY';
+    sellLogicMode?: 'ALL' | 'ANY';
   };
 }
 
@@ -391,6 +398,16 @@ export class BacktestService {
 
       console.log('Starting backtest loop...');
       console.log('Alert config:', JSON.stringify(config.alert, null, 2));
+      console.log('Enable BUY Signal:', config.alert.enableBuySignal);
+      console.log('Enable SELL Signal:', config.alert.enableSellSignal);
+      console.log(
+        'BUY Indicator Config:',
+        JSON.stringify(config.alert.buyIndicatorConfig, null, 2)
+      );
+      console.log(
+        'SELL Indicator Config:',
+        JSON.stringify(config.alert.sellIndicatorConfig, null, 2)
+      );
 
       let triggeredCount = 0;
       let positionOpenedCount = 0;
@@ -435,7 +452,24 @@ export class BacktestService {
         const prevCandles = candles.slice(0, i);
         const currentCandles = candles.slice(0, i + 1);
 
-        const indicatorConfig = config.alert.indicatorConfig || {};
+        // Determine which indicator config to use
+        const isDualSignalMode = config.alert.enableBuySignal && config.alert.enableSellSignal;
+        const isBuyOnly = config.alert.enableBuySignal && !config.alert.enableSellSignal;
+        const isSellOnly = config.alert.enableSellSignal && !config.alert.enableBuySignal;
+
+        let indicatorConfig = config.alert.indicatorConfig || {};
+
+        // For dual signal mode, merge both configs to compute all needed indicators
+        if (isDualSignalMode) {
+          indicatorConfig = {
+            ...config.alert.buyIndicatorConfig,
+            ...config.alert.sellIndicatorConfig
+          };
+        } else if (isBuyOnly) {
+          indicatorConfig = config.alert.buyIndicatorConfig || config.alert.indicatorConfig || {};
+        } else if (isSellOnly) {
+          indicatorConfig = config.alert.sellIndicatorConfig || config.alert.indicatorConfig || {};
+        }
 
         const prevIndicators = await technicalIndicatorsService.computeIndicators(
           prevCandles,
@@ -447,20 +481,68 @@ export class BacktestService {
           indicatorConfig
         );
 
-        // Check alert conditions
-        const mockAlert: any = {
-          condition: config.alert.condition,
-          signalType: config.alert.signalType,
-          logicMode: config.alert.logicMode,
-          indicatorConfig: config.alert.indicatorConfig
-        };
+        // Check for dual signal mode (both BUY and SELL)
+        let buySignalTriggered = false;
+        let sellSignalTriggered = false;
 
-        const alertResult = await alertEvaluationService.checkAlert(
-          mockAlert,
-          currentCandle.close,
-          currentIndicators,
-          prevIndicators
-        );
+        if (isDualSignalMode) {
+          // Check BUY signal
+          if (config.alert.buyIndicatorConfig) {
+            const buyAlert: any = {
+              condition: config.alert.condition,
+              signalType: SignalType.BUY,
+              logicMode: config.alert.buyLogicMode || 'ANY',
+              indicatorConfig: config.alert.buyIndicatorConfig
+            };
+            const buyResult = await alertEvaluationService.checkAlert(
+              buyAlert,
+              currentCandle.close,
+              currentIndicators,
+              prevIndicators
+            );
+            buySignalTriggered = buyResult.triggered;
+          }
+
+          // Check SELL signal
+          if (config.alert.sellIndicatorConfig) {
+            const sellAlert: any = {
+              condition: config.alert.condition,
+              signalType: SignalType.SELL,
+              logicMode: config.alert.sellLogicMode || 'ANY',
+              indicatorConfig: config.alert.sellIndicatorConfig
+            };
+            const sellResult = await alertEvaluationService.checkAlert(
+              sellAlert,
+              currentCandle.close,
+              currentIndicators,
+              prevIndicators
+            );
+            sellSignalTriggered = sellResult.triggered;
+          }
+        } else {
+          // Single signal mode (backward compatibility)
+          const mockAlert: any = {
+            condition: config.alert.condition,
+            signalType: config.alert.signalType,
+            logicMode: config.alert.logicMode,
+            indicatorConfig: config.alert.indicatorConfig
+          };
+
+          const alertResult = await alertEvaluationService.checkAlert(
+            mockAlert,
+            currentCandle.close,
+            currentIndicators,
+            prevIndicators
+          );
+
+          if (alertResult.triggered && alertResult.signalType) {
+            if (alertResult.signalType === SignalType.BUY) {
+              buySignalTriggered = true;
+            } else if (alertResult.signalType === SignalType.SELL) {
+              sellSignalTriggered = true;
+            }
+          }
+        }
 
         // Log first few evaluations to help debug
         if (i <= 100 && i % 20 === 0) {
@@ -476,12 +558,13 @@ export class BacktestService {
                   lower: currentIndicators.bollinger.lower?.toFixed(2)
                 }
               : 'N/A',
-            triggered: alertResult.triggered
+            buySignal: buySignalTriggered,
+            sellSignal: sellSignalTriggered
           });
         }
 
         // Enter new position if triggered and no position open
-        if (alertResult.triggered && !position.open && alertResult.signalType) {
+        if ((buySignalTriggered || sellSignalTriggered) && !position.open) {
           triggeredCount++;
 
           const entryPrice = currentCandle.close;
@@ -491,7 +574,7 @@ export class BacktestService {
 
           capital -= fees;
 
-          const signalType = alertResult.signalType === SignalType.BUY ? 'long' : 'short';
+          const signalType = buySignalTriggered ? 'long' : 'short';
 
           position = {
             open: true,
@@ -508,7 +591,8 @@ export class BacktestService {
               date: currentDate,
               type: signalType,
               price: entryPrice,
-              shares: shares.toFixed(2)
+              shares: shares.toFixed(2),
+              signal: buySignalTriggered ? 'BUY' : 'SELL'
             });
           }
 
@@ -516,13 +600,13 @@ export class BacktestService {
             entryDate: currentDate,
             entryPrice,
             pnlPct: 0,
-            signalType: alertResult.signalType === SignalType.BUY ? 'buy' : 'sell',
+            signalType: buySignalTriggered ? 'buy' : 'sell',
             shares
           });
 
           triggerPoints.push({
             date: currentDate,
-            type: alertResult.signalType === SignalType.BUY ? 'buy' : 'sell',
+            type: buySignalTriggered ? 'buy' : 'sell',
             price: entryPrice
           });
         }

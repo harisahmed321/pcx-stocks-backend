@@ -229,9 +229,16 @@ model Alert {
   triggeredPrice  Decimal?       @db.Decimal(24, 8) // Price when last triggered
   // Advanced Alert Fields
   name            String? // Custom alert name (e.g., "Buy Signal", "Sell Alert")
-  signalType      SignalType?    @default(NEUTRAL) // BUY, SELL, NEUTRAL
+  signalType      SignalType?    @default(NEUTRAL) // BUY, SELL, NEUTRAL (kept for backward compatibility)
   logicMode       LogicMode?     @default(ANY) // ALL (AND) or ANY (OR)
   indicatorConfig Json? // JSON configuration for technical indicators
+  // Dual Signal Support
+  enableBuySignal Boolean?       @default(false) // Enable BUY signal
+  enableSellSignal Boolean?      @default(false) // Enable SELL signal
+  buyIndicatorConfig Json? // Separate indicator config for BUY signals
+  sellIndicatorConfig Json? // Separate indicator config for SELL signals
+  buyLogicMode    LogicMode?     @default(ANY) // Logic mode for BUY signals
+  sellLogicMode   LogicMode?     @default(ANY) // Logic mode for SELL signals
   timeframe       String?        @default("daily") // daily, hourly, etc.
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
